@@ -1,348 +1,241 @@
-<!DOCTYPE html>
-<html lang="en">
-<head>
-<meta charset="UTF-8">
-<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no">
-<title>Smart Scan – Photo to PDF</title>
-<link href="https://fonts.googleapis.com/css2?family=Exo+2:wght@300;400;500;600;700;800&family=DM+Sans:opsz,wght@9..40,300;9..40,400;9..40,500;9..40,600&display=swap" rel="stylesheet">
-<style>
-:root{
-  --bg:#06091A;--bg2:#090E20;
-  --glass:rgba(255,255,255,0.055);
-  --glass-b:rgba(0,180,255,0.13);
-  --glass-s:rgba(255,255,255,0.10);
-  --acc:#00AAFF;--acc2:#0055FF;
-  --acc-glow:rgba(0,170,255,0.28);
-  --txt:#E6F4FF;--txt2:rgba(230,244,255,0.58);--txt3:rgba(230,244,255,0.32);
-  --red:#FF4757;--grn:#2ED573;--ylw:#FFA502;
-  --r:20px;--rs:12px;
-}
-.lm{
-  --bg:#ECF3FF;--bg2:#DDE9FF;
-  --glass:rgba(255,255,255,0.72);
-  --glass-b:rgba(0,100,255,0.18);
-  --glass-s:rgba(255,255,255,0.92);
-  --acc-glow:rgba(0,100,255,0.12);
-  --txt:#0A1628;--txt2:rgba(10,22,40,0.65);--txt3:rgba(10,22,40,0.38);
-}
-*{margin:0;padding:0;box-sizing:border-box;-webkit-tap-highlight-color:transparent}
-html,body{width:100%;height:100%;overflow:hidden;background:var(--bg);color:var(--txt);
-  font-family:'DM Sans',sans-serif;font-size:14px}
+import { useState, useRef, useEffect, useCallback } from "react";
 
-/* ── BG ORBS ── */
-.orbs{position:fixed;inset:0;z-index:0;overflow:hidden;pointer-events:none}
-.orb{position:absolute;border-radius:50%;filter:blur(80px);opacity:.13;animation:ofloat 9s ease-in-out infinite alternate}
-.o1{width:320px;height:320px;background:#0055FF;top:-120px;right:-60px;animation-delay:0s}
-.o2{width:220px;height:220px;background:#00AAFF;bottom:80px;left:-80px;animation-delay:-3.5s}
-.o3{width:160px;height:160px;background:#003ECC;top:42%;right:-20px;animation-delay:-6s}
-@keyframes ofloat{from{transform:translate(0,0)scale(1)}to{transform:translate(18px,28px)scale(1.12)}}
-.lm .orbs .orb{opacity:.06}
+/* ─── GOOGLE FONTS ─── */
+const fontLink = document.createElement("link");
+fontLink.rel = "stylesheet";
+fontLink.href = "https://fonts.googleapis.com/css2?family=Orbitron:wght@400;600;700;900&family=Exo+2:wght@300;400;500;600;700&display=swap";
+document.head.appendChild(fontLink);
 
-/* ── SPLASH ── */
-#splash{position:fixed;inset:0;z-index:1000;
-  background:linear-gradient(150deg,#04080F,#060C1C,#080E22);
-  display:flex;flex-direction:column;align-items:center;justify-content:center;
-  transition:opacity .75s ease,transform .75s ease}
-#splash.gone{opacity:0;transform:scale(1.04);pointer-events:none}
-.sp-logo{width:96px;height:96px;border-radius:26px;font-size:46px;
-  background:linear-gradient(135deg,#0055FF,#00AAFF);
-  display:flex;align-items:center;justify-content:center;
-  box-shadow:0 0 50px rgba(0,170,255,.4),0 0 100px rgba(0,85,255,.2);
-  animation:popIn .9s cubic-bezier(.34,1.56,.64,1) both;margin-bottom:22px}
-.sp-title{font-family:'Exo 2',sans-serif;font-size:27px;font-weight:800;letter-spacing:-.5px;
-  background:linear-gradient(90deg,#00AAFF,#fff 50%,#0055FF);
-  -webkit-background-clip:text;-webkit-text-fill-color:transparent;
-  animation:slideUp .9s .25s ease both}
-.sp-sub{color:rgba(255,255,255,.35);font-size:12px;margin-top:6px;animation:slideUp .9s .4s ease both}
-.sp-bar{width:110px;height:3px;background:rgba(255,255,255,.1);border-radius:3px;margin-top:44px;overflow:hidden;animation:slideUp .9s .5s ease both}
-.sp-fill{height:100%;background:linear-gradient(90deg,#0055FF,#00AAFF);border-radius:3px;animation:fillBar 2.4s .7s ease forwards}
-@keyframes popIn{from{transform:scale(0)rotate(-18deg);opacity:0}to{transform:scale(1)rotate(0);opacity:1}}
-@keyframes slideUp{from{transform:translateY(18px);opacity:0}to{transform:translateY(0);opacity:1}}
-@keyframes fillBar{0%{width:0}70%{width:85%}100%{width:100%}}
+/* ─── GLOBAL STYLES ─── */
+const globalStyles = `
+  * { box-sizing: border-box; margin: 0; padding: 0; -webkit-tap-highlight-color: transparent; }
+  body { background: #050508; font-family: 'Exo 2', sans-serif; color: #e2f0ff; overflow: hidden; }
+  ::-webkit-scrollbar { width: 3px; }
+  ::-webkit-scrollbar-track { background: #0a0a18; }
+  ::-webkit-scrollbar-thumb { background: #00c8ff44; border-radius: 4px; }
+  @keyframes scanline {
+    0% { transform: translateY(-100%); }
+    100% { transform: translateY(100vh); }
+  }
+  @keyframes pulse-ring {
+    0% { transform: scale(0.8); opacity: 1; }
+    100% { transform: scale(2.2); opacity: 0; }
+  }
+  @keyframes neon-flicker {
+    0%,19%,21%,23%,25%,54%,56%,100% { text-shadow: 0 0 8px #00c8ff, 0 0 20px #00c8ff, 0 0 40px #0080ff; }
+    20%,24%,55% { text-shadow: none; }
+  }
+  @keyframes float-up {
+    0% { transform: translateY(40px); opacity: 0; }
+    100% { transform: translateY(0); opacity: 1; }
+  }
+  @keyframes spin-logo {
+    0% { transform: scale(0) rotate(-180deg); opacity: 0; }
+    60% { transform: scale(1.15) rotate(10deg); opacity: 1; }
+    100% { transform: scale(1) rotate(0deg); opacity: 1; }
+  }
+  @keyframes progress-bar {
+    0% { width: 0%; }
+    100% { width: 100%; }
+  }
+  @keyframes corner-pulse {
+    0%,100% { border-color: #00c8ff; box-shadow: 0 0 8px #00c8ff; }
+    50% { border-color: #0080ff; box-shadow: 0 0 20px #0080ff; }
+  }
+  @keyframes slide-up {
+    from { transform: translateY(20px); opacity: 0; }
+    to { transform: translateY(0); opacity: 1; }
+  }
+  @keyframes glow-btn {
+    0%,100% { box-shadow: 0 0 12px #00c8ff88, inset 0 0 12px #00c8ff11; }
+    50% { box-shadow: 0 0 28px #00c8ffcc, inset 0 0 20px #00c8ff22; }
+  }
+  @keyframes shake {
+    0%,100% { transform: translateX(0); }
+    20% { transform: translateX(-6px); }
+    40% { transform: translateX(6px); }
+    60% { transform: translateX(-4px); }
+    80% { transform: translateX(4px); }
+  }
+  @keyframes badge-pop {
+    0% { transform: scale(0); }
+    70% { transform: scale(1.2); }
+    100% { transform: scale(1); }
+  }
+  .neon-text { animation: neon-flicker 5s infinite; }
+  .float-anim { animation: float-up 0.5s ease forwards; }
+  .glow-btn { animation: glow-btn 2.5s ease infinite; }
+  .scan-card:hover { transform: translateY(-2px); transition: transform 0.2s; }
+`;
+const styleEl = document.createElement("style");
+styleEl.textContent = globalStyles;
+document.head.appendChild(styleEl);
 
-/* ── APP ── */
-#app{position:fixed;inset:0;z-index:1;display:flex;flex-direction:column}
-.screen{position:absolute;inset:0;display:none;flex-direction:column;overflow:hidden;
-  padding-bottom:68px;animation:scrIn .32s ease both}
-.screen.active{display:flex}
-.screen.nonav{padding-bottom:0}
-@keyframes scrIn{from{opacity:0;transform:translateX(18px)}to{opacity:1;transform:translateX(0)}}
+/* ─── CONSTANTS ─── */
+const C = {
+  bg: "#050508",
+  surface: "#0b0b1a",
+  card: "#10102a",
+  cardHi: "#14143a",
+  border: "#1e1e4a",
+  neon: "#00c8ff",
+  neon2: "#0070ff",
+  neonGlow: "#00c8ff44",
+  text: "#e2f0ff",
+  muted: "#6b7fa8",
+  danger: "#ff4466",
+  success: "#00ffaa",
+  warn: "#ffaa00",
+};
 
-/* ── HEADER ── */
-.hdr{padding:14px 18px 10px;display:flex;align-items:center;gap:10px;flex-shrink:0;
-  background:linear-gradient(to bottom,rgba(6,9,26,.92) 80%,transparent);z-index:10}
-.hbk,.hact{width:40px;height:40px;border-radius:12px;background:var(--glass);
-  border:1px solid var(--glass-b);backdrop-filter:blur(12px);
-  display:flex;align-items:center;justify-content:center;font-size:18px;cursor:pointer;
-  transition:.18s;flex-shrink:0}
-.hbk:active,.hact:active{transform:scale(.91)}
-.htitle{font-family:'Exo 2',sans-serif;font-size:19px;font-weight:700;flex:1}
-.hact.prim{background:linear-gradient(135deg,#0055FF,#00AAFF);border:none;color:#fff}
+/* ─── ICONS (SVG Inline) ─── */
+const Ico = {
+  camera: (s=22) => <svg width={s} height={s} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/><circle cx="12" cy="13" r="4"/></svg>,
+  crop: (s=22) => <svg width={s} height={s} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M6 2v14a2 2 0 0 0 2 2h14"/><path d="M18 22V8a2 2 0 0 0-2-2H2"/></svg>,
+  filter: (s=22) => <svg width={s} height={s} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polygon points="22 3 2 3 10 12.46 10 19 14 21 14 12.46 22 3"/></svg>,
+  pdf: (s=22) => <svg width={s} height={s} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="9" y1="15" x2="15" y2="15"/></svg>,
+  history: (s=22) => <svg width={s} height={s} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="12 8 12 12 14 14"/><path d="M3.05 11a9 9 0 1 1 .5 4m-.5 5v-5h5"/></svg>,
+  share: (s=22) => <svg width={s} height={s} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="18" cy="5" r="3"/><circle cx="6" cy="12" r="3"/><circle cx="18" cy="19" r="3"/><line x1="8.59" y1="13.51" x2="15.42" y2="17.49"/><line x1="15.41" y1="6.51" x2="8.59" y2="10.49"/></svg>,
+  lock: (s=20) => <svg width={s} height={s} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>,
+  sign: (s=20) => <svg width={s} height={s} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M17 3a2.828 2.828 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5L17 3z"/></svg>,
+  water: (s=20) => <svg width={s} height={s} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z"/></svg>,
+  moon: (s=20) => <svg width={s} height={s} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/></svg>,
+  sun: (s=20) => <svg width={s} height={s} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="5"/><line x1="12" y1="1" x2="12" y2="3"/><line x1="12" y1="21" x2="12" y2="23"/><line x1="4.22" y1="4.22" x2="5.64" y2="5.64"/><line x1="18.36" y1="18.36" x2="19.78" y2="19.78"/><line x1="1" y1="12" x2="3" y2="12"/><line x1="21" y1="12" x2="23" y2="12"/><line x1="4.22" y1="19.78" x2="5.64" y2="18.36"/><line x1="18.36" y1="5.64" x2="19.78" y2="4.22"/></svg>,
+  compress: (s=20) => <svg width={s} height={s} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="4 14 10 14 10 20"/><polyline points="20 10 14 10 14 4"/><line x1="10" y1="14" x2="3" y2="21"/><line x1="21" y1="3" x2="14" y2="10"/></svg>,
+  wifi_off: (s=20) => <svg width={s} height={s} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="1" y1="1" x2="23" y2="23"/><path d="M16.72 11.06A10.94 10.94 0 0 1 19 12.55"/><path d="M5 12.55a10.94 10.94 0 0 1 5.17-2.39"/><path d="M10.71 5.05A16 16 0 0 1 22.56 9"/><path d="M1.42 9a15.91 15.91 0 0 1 4.7-2.88"/><path d="M8.53 16.11a6 6 0 0 1 6.95 0"/><line x1="12" y1="20" x2="12.01" y2="20"/></svg>,
+  check: (s=18) => <svg width={s} height={s} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12"/></svg>,
+  trash: (s=18) => <svg width={s} height={s} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2"/></svg>,
+  edit: (s=18) => <svg width={s} height={s} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>,
+  back: (s=22) => <svg width={s} height={s} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="15 18 9 12 15 6"/></svg>,
+  close: (s=20) => <svg width={s} height={s} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>,
+  drag: (s=20) => <svg width={s} height={s} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="3" y1="9" x2="21" y2="9"/><line x1="3" y1="15" x2="21" y2="15"/></svg>,
+  quality: (s=20) => <svg width={s} height={s} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="8" r="6"/><path d="M15.477 12.89L17 22l-5-3-5 3 1.523-9.11"/></svg>,
+  bright: (s=20) => <svg width={s} height={s} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="5"/><line x1="12" y1="1" x2="12" y2="3"/><line x1="12" y1="21" x2="12" y2="23"/><line x1="4.22" y1="4.22" x2="5.64" y2="5.64"/><line x1="18.36" y1="18.36" x2="19.78" y2="19.78"/><line x1="1" y1="12" x2="3" y2="12"/><line x1="21" y1="12" x2="23" y2="12"/></svg>,
+  plus: (s=22) => <svg width={s} height={s} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>,
+  whatsapp: (s=20) => <svg width={s} height={s} viewBox="0 0 24 24" fill="currentColor"><path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347m-5.421 7.403h-.004a9.87 9.87 0 0 1-5.031-1.378l-.361-.214-3.741.982.998-3.648-.235-.374a9.86 9.86 0 0 1-1.51-5.26c.001-5.45 4.436-9.884 9.888-9.884 2.64 0 5.122 1.03 6.988 2.898a9.825 9.825 0 0 1 2.893 6.994c-.003 5.45-4.437 9.884-9.885 9.884m8.413-18.297A11.815 11.815 0 0 0 12.05 0C5.495 0 .16 5.335.157 11.892c0 2.096.547 4.142 1.588 5.945L.057 24l6.305-1.654a11.882 11.882 0 0 0 5.683 1.448h.005c6.554 0 11.89-5.335 11.893-11.893a11.821 11.821 0 0 0-3.48-8.413z"/></svg>,
+  email: (s=20) => <svg width={s} height={s} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"/><polyline points="22,6 12,13 2,6"/></svg>,
+  drive: (s=20) => <svg width={s} height={s} viewBox="0 0 24 24" fill="currentColor"><path d="M7.71 3.5L1.15 15l3.75 6.5h14.2l3.75-6.5L16.29 3.5zm.58 1h7.42l5.5 9.5h-5.5L12 19.5l-3.21-5.5H3.29z"/></svg>,
+};
 
-/* ── SCROLL ── */
-.sa{flex:1;overflow-y:auto;padding:0 15px 16px;-webkit-overflow-scrolling:touch}
-.sa::-webkit-scrollbar{display:none}
-
-/* ── GLASS CARD ── */
-.gc{background:var(--glass);border:1px solid var(--glass-b);
-  backdrop-filter:blur(22px);-webkit-backdrop-filter:blur(22px);
-  border-radius:var(--r);padding:18px;transition:.25s}
-.gc-sm{background:var(--glass);border:1px solid var(--glass-b);
-  backdrop-filter:blur(22px);border-radius:var(--rs);padding:13px}
-
-/* ── BTNS ── */
-.btn{display:flex;align-items:center;justify-content:center;gap:8px;
-  padding:13px 22px;border-radius:14px;border:none;cursor:pointer;
-  font-family:'DM Sans',sans-serif;font-size:14px;font-weight:600;
-  transition:.18s;user-select:none}
-.btn:active{transform:scale(.95)}
-.btn-p{background:linear-gradient(135deg,#0055FF,#00AAFF);color:#fff;
-  box-shadow:0 4px 18px rgba(0,170,255,.33)}
-.btn-g{background:var(--glass);color:var(--txt);border:1px solid var(--glass-b);backdrop-filter:blur(12px)}
-.btn-s{background:linear-gradient(135deg,#00B84A,#2ED573);color:#fff;
-  box-shadow:0 4px 18px rgba(46,213,115,.28)}
-.btn-d{background:rgba(255,71,87,.14);color:var(--red);border:1px solid rgba(255,71,87,.28)}
-.btn-w{width:100%}
-
-/* ── HOME ── */
-.hero{margin:6px 0 18px;background:linear-gradient(135deg,rgba(0,85,255,.14),rgba(0,170,255,.07));
-  border:1px solid rgba(0,170,255,.18);border-radius:24px;padding:22px;
-  backdrop-filter:blur(22px);text-align:center;position:relative;overflow:hidden}
-.hero::before{content:'';position:absolute;inset:0;
-  background:radial-gradient(circle at 75% 25%,rgba(0,170,255,.09),transparent 62%);pointer-events:none}
-.hero-ico{font-size:44px;margin-bottom:10px}
-.hero h2{font-family:'Exo 2',sans-serif;font-size:21px;font-weight:800;
-  background:linear-gradient(90deg,#00AAFF,#fff);
-  -webkit-background-clip:text;-webkit-text-fill-color:transparent;margin-bottom:5px}
-.hero p{color:var(--txt2);font-size:12px;line-height:1.55}
-.badge{display:inline-flex;align-items:center;gap:5px;background:rgba(0,170,255,.14);
-  border:1px solid rgba(0,170,255,.28);border-radius:20px;
-  padding:4px 12px;font-size:12px;font-weight:600;color:var(--acc);margin-top:14px}
-.qa{display:grid;grid-template-columns:1fr 1fr;gap:11px;margin-bottom:18px}
-.qb{background:var(--glass);border:1px solid var(--glass-b);backdrop-filter:blur(22px);
-  border-radius:20px;padding:18px 14px;text-align:center;cursor:pointer;
-  transition:.22s;user-select:none;display:flex;flex-direction:column;align-items:center;gap:9px}
-.qb:active{transform:scale(.94);background:var(--glass-s)}
-.qi{width:50px;height:50px;border-radius:16px;display:flex;align-items:center;justify-content:center;font-size:23px}
-.qi.bl{background:rgba(0,85,255,.12);border:1px solid rgba(0,170,255,.22)}
-.qi.pu{background:rgba(139,92,246,.12);border:1px solid rgba(167,139,250,.22)}
-.qi.gr{background:rgba(0,200,83,.12);border:1px solid rgba(46,213,115,.22)}
-.qi.or{background:rgba(255,107,0,.12);border:1px solid rgba(255,165,2,.22)}
-.ql{font-size:12px;font-weight:600;color:var(--txt2)}
-.sec-hdr{display:flex;justify-content:space-between;align-items:center;margin-bottom:11px}
-.sec-t{font-family:'Exo 2',sans-serif;font-size:15px;font-weight:700}
-.sec-l{color:var(--acc);font-size:12px;cursor:pointer}
-.pps{display:flex;gap:9px;overflow-x:auto;margin-bottom:14px;padding-bottom:4px}
-.pps::-webkit-scrollbar{display:none}
-.ppi{flex-shrink:0;width:68px;cursor:pointer;position:relative}
-.ppi img{width:68px;height:88px;object-fit:cover;border-radius:8px;border:2px solid transparent;transition:.2s}
-.ppi.active img{border-color:var(--acc);box-shadow:0 0 10px var(--acc-glow)}
-.ppn{position:absolute;bottom:3px;right:3px;background:rgba(0,0,0,.72);color:#fff;
-  font-size:9px;font-weight:700;border-radius:4px;padding:1px 4px}
-.pdel{position:absolute;top:-6px;right:-6px;width:20px;height:20px;border-radius:50%;
-  background:var(--red);color:#fff;font-size:12px;display:flex;align-items:center;
-  justify-content:center;cursor:pointer;box-shadow:0 2px 6px rgba(0,0,0,.35)}
-@keyframes pulse{0%,100%{box-shadow:0 4px 18px rgba(0,170,255,.33)}50%{box-shadow:0 4px 28px rgba(0,170,255,.6)}}
-.pulse-btn{animation:pulse 2.2s ease-in-out infinite}
-
-/* ── CAMERA ── */
-#scr-cam{background:#000;padding-bottom:0}
-#camvid{position:absolute;inset:0;width:100%;height:100%;object-fit:cover}
-.camov{position:absolute;inset:0;display:flex;flex-direction:column}
-.camtop{padding:14px 18px 0;display:flex;justify-content:space-between;align-items:center;z-index:10}
-.camfr{flex:1;display:flex;align-items:center;justify-content:center}
-.docfr{width:78%;height:60%;border:2px solid rgba(0,170,255,.85);border-radius:8px;position:relative;
-  box-shadow:0 0 0 2000px rgba(0,0,0,.38)}
-.dfc{position:absolute;width:20px;height:20px;border-color:var(--acc);border-style:solid}
-.dfc.tl{top:-2px;left:-2px;border-width:3px 0 0 3px;border-radius:4px 0 0 0}
-.dfc.tr{top:-2px;right:-2px;border-width:3px 3px 0 0;border-radius:0 4px 0 0}
-.dfc.bl{bottom:-2px;left:-2px;border-width:0 0 3px 3px;border-radius:0 0 0 4px}
-.dfc.br{bottom:-2px;right:-2px;border-width:0 3px 3px 0;border-radius:0 0 4px 0}
-.scanline{position:absolute;left:0;right:0;height:2px;
-  background:linear-gradient(90deg,transparent,var(--acc),transparent);
-  box-shadow:0 0 10px var(--acc);animation:scanA 2.6s ease-in-out infinite}
-@keyframes scanA{0%,100%{top:0;opacity:0}10%{opacity:1}90%{opacity:1}50%{top:100%}}
-.cambot{padding:22px 30px;display:flex;align-items:center;justify-content:space-between;
-  background:linear-gradient(to top,rgba(0,0,0,.82),transparent);z-index:10}
-.cib{width:50px;height:50px;border-radius:50%;background:rgba(255,255,255,.16);
-  backdrop-filter:blur(10px);display:flex;align-items:center;justify-content:center;
-  font-size:22px;cursor:pointer;border:none;color:#fff;transition:.18s}
-.ccb{width:74px;height:74px;border-radius:50%;background:#fff;border:4px solid rgba(255,255,255,.28);
-  cursor:pointer;display:flex;align-items:center;justify-content:center;
-  box-shadow:0 0 0 4px rgba(255,255,255,.1);transition:.14s}
-.ccb:active{transform:scale(.91)}
-.cci{width:56px;height:56px;border-radius:50%;background:linear-gradient(135deg,#0055FF,#00AAFF)}
-
-/* ── EDIT ── */
-.ecw{margin:0 15px;border-radius:var(--r);overflow:hidden;position:relative;background:#111;flex-shrink:0}
-#editcvs{width:100%;display:block;cursor:crosshair}
-.ch{position:absolute;width:26px;height:26px;border-radius:7px;background:var(--acc);
-  cursor:grab;z-index:10;box-shadow:0 2px 10px rgba(0,0,0,.5);transition:.12s;
-  display:flex;align-items:center;justify-content:center;font-size:10px;color:#fff}
-.ch:active{transform:scale(1.25);cursor:grabbing}
-.fstrip{display:flex;gap:9px;padding:12px 15px;overflow-x:auto;flex-shrink:0}
-.fstrip::-webkit-scrollbar{display:none}
-.ft{flex-shrink:0;width:62px;text-align:center;cursor:pointer}
-.fti{width:62px;height:62px;border-radius:12px;background:var(--glass);
-  border:2px solid transparent;overflow:hidden;margin-bottom:4px;
-  transition:.2s;display:flex;align-items:center;justify-content:center;font-size:22px}
-.ft.act .fti{border-color:var(--acc);box-shadow:0 0 12px var(--acc-glow)}
-.ftl{font-size:10px;color:var(--txt2)}
-.tbar{display:flex;gap:9px;padding:0 15px 11px;overflow-x:auto;flex-shrink:0}
-.tbar::-webkit-scrollbar{display:none}
-.tb{flex-shrink:0;background:var(--glass);border:1px solid var(--glass-b);
-  border-radius:12px;padding:9px 15px;display:flex;align-items:center;gap:7px;
-  font-size:12px;color:var(--txt);cursor:pointer;backdrop-filter:blur(12px);
-  transition:.18s;white-space:nowrap}
-.tb:active{background:var(--glass-s)}
-.tb.act{border-color:var(--acc);color:var(--acc);background:rgba(0,170,255,.1)}
-
-/* ── SIGNATURE ── */
-#sigcvs{width:100%;border-radius:var(--r);background:rgba(255,255,255,.04);
-  border:1px dashed var(--glass-b);touch-action:none;cursor:crosshair;display:block}
-
-/* ── REORDER ── */
-.plist{display:flex;flex-direction:column;gap:11px}
-.pitem{background:var(--glass);border:1px solid var(--glass-b);border-radius:var(--rs);
-  padding:11px;display:flex;align-items:center;gap:11px;backdrop-filter:blur(22px);
-  transition:.2s;user-select:none}
-.pitem.dragging{opacity:.45;transform:scale(.97)}
-.pitem.over{border-color:var(--acc);background:rgba(0,170,255,.08)}
-.pthumb{width:48px;height:62px;border-radius:8px;background:#111;overflow:hidden;flex-shrink:0}
-.pthumb img{width:100%;height:100%;object-fit:cover}
-.pinfo{flex:1}.pname{font-size:13px;font-weight:600}
-.psub{font-size:11px;color:var(--txt3);margin-top:2px}
-.dh{color:var(--txt3);font-size:20px;cursor:grab;padding:4px}
-
-/* ── PDF SETTINGS ── */
-.srow{display:flex;align-items:center;justify-content:space-between;
-  padding:13px 0;border-bottom:1px solid var(--glass-b)}
-.srow:last-child{border-bottom:none}
-.slab{display:flex;align-items:center;gap:9px}
-.slt{font-size:14px;font-weight:500}
-.slsub{font-size:11px;color:var(--txt3);margin-top:2px}
-.qopts{display:flex;gap:7px}
-.qbtn{padding:7px 13px;border-radius:10px;font-size:12px;font-weight:600;
-  border:1px solid var(--glass-b);background:var(--glass);color:var(--txt2);cursor:pointer;transition:.18s}
-.qbtn.act{background:rgba(0,170,255,.14);border-color:var(--acc);color:var(--acc)}
-.tog{width:46px;height:24px;border-radius:12px;background:rgba(255,255,255,.14);
-  position:relative;cursor:pointer;transition:.28s;flex-shrink:0}
-.tog.on{background:linear-gradient(135deg,#0055FF,#00AAFF)}
-.togth{position:absolute;top:3px;left:3px;width:18px;height:18px;border-radius:50%;
-  background:#fff;transition:.28s;box-shadow:0 1px 4px rgba(0,0,0,.3)}
-.tog.on .togth{left:25px}
-.ginp{width:100%;padding:11px 15px;border-radius:12px;background:var(--glass);
-  border:1px solid var(--glass-b);color:var(--txt);font-family:'DM Sans',sans-serif;
-  font-size:14px;outline:none;backdrop-filter:blur(12px);transition:.2s}
-.ginp:focus{border-color:var(--acc);box-shadow:0 0 0 3px var(--acc-glow)}
-.ginp::placeholder{color:var(--txt3)}
-.pbar{height:4px;background:rgba(255,255,255,.09);border-radius:2px;overflow:hidden;margin:7px 0}
-.pbfill{height:100%;background:linear-gradient(90deg,#0055FF,#00AAFF);border-radius:2px;transition:width .35s ease}
-
-/* ── HISTORY ── */
-.hitem{background:var(--glass);border:1px solid var(--glass-b);border-radius:var(--rs);
-  padding:13px;display:flex;align-items:center;gap:13px;margin-bottom:9px;
-  backdrop-filter:blur(22px);cursor:pointer;transition:.2s}
-.hitem:active{background:var(--glass-s)}
-.hthumb{width:42px;height:54px;border-radius:8px;background:linear-gradient(135deg,rgba(0,85,255,.14),rgba(0,170,255,.08));
-  display:flex;align-items:center;justify-content:center;font-size:22px;flex-shrink:0;
-  border:1px solid var(--glass-b)}
-.hinfo{flex:1;min-width:0}
-.hname{font-size:14px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-.hmeta{font-size:11px;color:var(--txt3);margin-top:3px}
-.hacts{display:flex;gap:7px}
-.hab{width:33px;height:33px;border-radius:10px;background:var(--glass);
-  border:1px solid var(--glass-b);display:flex;align-items:center;justify-content:center;
-  font-size:15px;cursor:pointer;transition:.18s}
-.hab:active{transform:scale(.88)}
-
-/* ── SETTINGS ── */
-.sstitle{font-size:11px;font-weight:700;color:var(--acc);text-transform:uppercase;
-  letter-spacing:1.4px;margin-bottom:9px;padding:0 3px}
-
-/* ── BOTTOM NAV ── */
-.bnav{position:fixed;bottom:0;left:0;right:0;z-index:100;height:68px;display:flex;
-  background:rgba(6,9,26,.88);backdrop-filter:blur(22px);-webkit-backdrop-filter:blur(22px);
-  border-top:1px solid var(--glass-b);padding-bottom:6px}
-.nb{flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;
-  gap:3px;cursor:pointer;transition:.18s;padding-top:7px;color:var(--txt3);
-  font-size:10px;font-weight:600}
-.nb.on{color:var(--acc)}
-.ni{font-size:21px;transition:.18s}
-.nb.on .ni{filter:drop-shadow(0 0 6px var(--acc))}
-.lm .bnav{background:rgba(220,235,255,.88);border-top-color:rgba(0,100,255,.14)}
-
-/* ── MODAL ── */
-.mover{position:fixed;inset:0;z-index:200;background:rgba(0,0,0,.68);
-  backdrop-filter:blur(5px);display:none;align-items:flex-end;justify-content:center}
-.mover.vis{display:flex}
-.msheet{width:100%;max-width:480px;border-radius:26px 26px 0 0;
-  background:rgba(7,12,26,.97);border-top:1px solid var(--glass-b);
-  backdrop-filter:blur(40px);padding:18px 18px 34px;
-  animation:sheetup .32s cubic-bezier(.34,1.1,.64,1) both}
-@keyframes sheetup{from{transform:translateY(100%)}to{transform:translateY(0)}}
-.mhandle{width:38px;height:4px;border-radius:2px;background:rgba(255,255,255,.18);margin:0 auto 18px}
-.mtitle{font-family:'Exo 2',sans-serif;font-size:17px;font-weight:700;margin-bottom:14px}
-
-/* ── TOAST ── */
-.toast{position:fixed;top:22px;left:50%;transform:translateX(-50%)translateY(-18px);
-  z-index:999;background:rgba(7,12,26,.92);border:1px solid var(--glass-b);
-  border-radius:14px;padding:11px 18px;display:flex;align-items:center;gap:9px;
-  font-size:13px;font-weight:500;backdrop-filter:blur(22px);pointer-events:none;
-  opacity:0;transition:.3s;max-width:calc(100% - 36px);white-space:nowrap}
-.toast.vis{opacity:1;transform:translateX(-50%)translateY(0)}
-
-/* ── EMPTY ── */
-.empty{text-align:center;padding:44px 18px}
-.empty-ico{font-size:52px;margin-bottom:14px}
-.empty-t{font-family:'Exo 2',sans-serif;font-size:17px;font-weight:700;margin-bottom:7px}
-.empty-s{color:var(--txt2);font-size:12px;line-height:1.6}
-
-/* watermark preview */
-#wmPrev{width:100%;height:110px;border-radius:12px;background:rgba(255,255,255,.04);
-  border:1px solid var(--glass-b);display:flex;align-items:center;justify-content:center;
-  font-size:17px;font-weight:700;color:rgba(0,170,255,.38);margin-top:11px;
-  letter-spacing:2px;text-transform:uppercase;pointer-events:none;
-  font-family:'Exo 2',sans-serif}
-.divider{height:1px;background:var(--glass-b);margin:14px 0}
-</style>
-</head>
-<body>
-
-<div class="orbs"><div class="orb o1"></div><div class="orb o2"></div><div class="orb o3"></div></div>
-
-<!-- SPLASH -->
-<div id="splash">
-  <div class="sp-logo">📄</div>
-  <div class="sp-title">Smart Scan</div>
-  <div class="sp-sub">Photo to PDF · Premium Edition</div>
-  <div class="sp-bar"><div class="sp-fill"></div></div>
-</div>
-
-<!-- APP -->
-<div id="app">
-
-<!-- ═══ HOME ═══ -->
-<div id="scr-home" class="screen active">
-  <div class="hdr">
-    <div style="flex:1">
-      <div style="font-size:11px;color:var(--txt3);margin-bottom:2px">Offline Ready ✅</div>
-      <div style="font-family:'Exo 2',sans-serif;font-size:21px;font-weight:800">Smart Scan 📄</div>
+/* ─── TOAST COMPONENT ─── */
+function Toast({ msg, onHide }) {
+  useEffect(() => { const t = setTimeout(onHide, 2200); return () => clearTimeout(t); }, []);
+  return (
+    <div style={{ position:"fixed", bottom:90, left:"50%", transform:"translateX(-50%)", background:`linear-gradient(135deg,${C.card},${C.cardHi})`, border:`1px solid ${C.neon}44`, borderRadius:12, padding:"10px 22px", color:C.neon, fontSize:13, fontFamily:"'Exo 2',sans-serif", fontWeight:600, zIndex:9999, boxShadow:`0 0 20px ${C.neonGlow}`, animation:"float-up 0.3s ease", whiteSpace:"nowrap" }}>
+      {msg}
     </div>
-    <div class="hact" id="themeBtn" onclick="toggleTheme()">🌙</div>
-    <div class="hact" onclick="nav('scr-settings','nb-cfg')" style="margin-left:7px">⚙️</div>
-  </div>
-  <div class="sa">
-    <div class="hero gc">
-      <div class="hero-ico">🔍</div>
-      <h2>Scan Any Document</h2>
-      <p>Camera scan · Edge detection · Filters · PDF export<br>All processing on-device 🔒</p>
-      <div class="badge" id="pgBadge">📄 0 pages ready</div>
+  );
+}
+
+/* ─── SPLASH SCREEN ─── */
+function SplashScreen({ onDone }) {
+  const [prog, setProg] = useState(0);
+  useEffect(() => {
+    let v = 0;
+    const iv = setInterval(() => {
+      v += Math.random() * 4 + 2;
+      if (v >= 100) { v = 100; clearInterval(iv); setTimeout(onDone, 400); }
+      setProg(Math.min(v, 100));
+    }, 60);
+    return () => clearInterval(iv);
+  }, []);
+  return (
+    <div style={{ position:"fixed", inset:0, background:C.bg, display:"flex", flexDirection:"column", alignItems:"center", justifyContent:"center", zIndex:9999, overflow:"hidden" }}>
+      {/* Scanline effect */}
+      <div style={{ position:"absolute", top:0, left:0, right:0, height:2, background:`linear-gradient(90deg,transparent,${C.neon},transparent)`, animation:"scanline 2.5s linear infinite", opacity:0.5 }} />
+      {/* Grid bg */}
+      <div style={{ position:"absolute", inset:0, backgroundImage:`linear-gradient(${C.border}22 1px,transparent 1px),linear-gradient(90deg,${C.border}22 1px,transparent 1px)`, backgroundSize:"40px 40px", opacity:0.6 }} />
+      {/* Logo */}
+      <div style={{ animation:"spin-logo 1s cubic-bezier(.34,1.56,.64,1) forwards", marginBottom:24 }}>
+        <div style={{ width:100, height:100, borderRadius:28, background:`linear-gradient(135deg,${C.neon2},${C.neon})`, display:"flex", alignItems:"center", justifyContent:"center", boxShadow:`0 0 40px ${C.neon}88, 0 0 80px ${C.neon}44` }}>
+          <svg width={52} height={52} viewBox="0 0 24 24" fill="white"><path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/><circle cx="12" cy="13" r="4" fill="#0070ff"/></svg>
+        </div>
+      </div>
+      {/* Title */}
+      <h1 style={{ fontFamily:"'Orbitron',sans-serif", fontSize:26, fontWeight:900, color:C.neon, letterSpacing:2, animation:"float-up 0.8s 0.5s ease both", textShadow:`0 0 20px ${C.neon}` }}>SMART SCAN</h1>
+      <p style={{ color:C.muted, fontSize:13, marginTop:6, letterSpacing:3, animation:"float-up 0.8s 0.7s ease both" }}>PHOTO  TO  PDF  PRO</p>
+      {/* Progress */}
+      <div style={{ width:220, marginTop:48, animation:"float-up 0.8s 0.9s ease both" }}>
+        <div style={{ height:3, background:C.border, borderRadius:4, overflow:"hidden" }}>
+          <div style={{ height:"100%", width:`${prog}%`, background:`linear-gradient(90deg,${C.neon2},${C.neon})`, transition:"width 0.08s linear", boxShadow:`0 0 10px ${C.neon}` }} />
+        </div>
+        <div style={{ textAlign:"center", marginTop:10, color:C.muted, fontSize:12, fontFamily:"'Orbitron',sans-serif" }}>{Math.round(prog)}%</div>
+      </div>
+      <p style={{ position:"absolute", bottom:30, color:C.border, fontSize:11, letterSpacing:2, fontFamily:"'Orbitron',sans-serif" }}>v2.0 PREMIUM</p>
     </div>
-    <div style="margin-bottom:16px">
-      <div class="sec-hdr"><span class="sec-t">Quick Actions</span></div>
-      <div class="qa">
-        <div class="qb" onclick="go('scr-cam')"><div class="qi bl">📷</div><span class="ql">Camera Scan</span></div>
-        <div class="qb" onclick="gallInp.click()"><div class="qi pu">🖼️</div><span class="ql">Gallery</span></div>
-        <div class="qb" onclick="go('scr-reorder')"><div class="qi or">🔀</div><span class="ql">Reorder Pages</span></div>
-        <div class="qb" oncl
+  );
+}
+
+/* ─── CAMERA SCREEN ─── */
+function CameraScreen({ onCapture, onBack }) {
+  const [captured, setCaptured] = useState(false);
+  const [flash, setFlash] = useState(false);
+  const [pages, setPages] = useState([]);
+  const docs = ["📄 Invoice_2024.jpg","📑 Aadhaar_Card.jpg","📋 Marksheet.jpg","🗒️ Contract_Page.jpg"];
+
+  const handleCapture = () => {
+    setFlash(true);
+    setTimeout(() => setFlash(false), 200);
+    const newPage = { id: Date.now(), label: docs[pages.length % docs.length], thumb: pages.length };
+    setPages(p => [...p, newPage]);
+    setCaptured(true);
+  };
+
+  return (
+    <div style={{ display:"flex", flexDirection:"column", height:"100%", background:C.bg }}>
+      {/* Viewfinder */}
+      <div style={{ position:"relative", flex:1, background:"#000", overflow:"hidden" }}>
+        {flash && <div style={{ position:"absolute", inset:0, background:"white", zIndex:10, opacity:0.8 }} />}
+        {/* Fake camera background */}
+        <div style={{ position:"absolute", inset:0, backgroundImage:`linear-gradient(135deg, #0a1a2a 0%, #050508 50%, #0a0a20 100%)` }} />
+        <div style={{ position:"absolute", inset:0, backgroundImage:`radial-gradient(circle at 30% 40%, #001a3344 0%, transparent 60%), radial-gradient(circle at 70% 60%, #0a00330 0%, transparent 50%)` }} />
+        {/* Scanline overlay */}
+        <div style={{ position:"absolute", top:0, left:0, right:0, height:1.5, background:`linear-gradient(90deg,transparent,${C.neon}88,transparent)`, animation:"scanline 2s linear infinite" }} />
+        {/* Corner guides */}
+        {[{t:20,l:20,tr:"tl"},{t:20,r:20,tr:"tr"},{b:20,l:20,tr:"bl"},{b:20,r:20,tr:"br"}].map((c,i) => (
+          <div key={i} style={{ position:"absolute", width:32, height:32, ...c, animation:"corner-pulse 2s infinite" }}>
+            <div style={{ position:"absolute", top:0, left:0, width:"100%", height:3, background:C.neon, boxShadow:`0 0 8px ${C.neon}` }} />
+            <div style={{ position:"absolute", top:0, left:0, height:"100%", width:3, background:C.neon, boxShadow:`0 0 8px ${C.neon}` }} />
+          </div>
+        ))}
+        {/* Document outline */}
+        <div style={{ position:"absolute", top:"15%", left:"8%", right:"8%", bottom:"20%", border:`2px solid ${C.neon}55`, borderRadius:4 }}>
+          <div style={{ position:"absolute", inset:0, background:`${C.neon}06` }} />
+          {/* Fake doc content */}
+          <div style={{ margin:20, opacity:0.3 }}>
+            {[80,60,90,55,70,45].map((w,i) => <div key={i} style={{ height:2, background:C.neon, width:`${w}%`, marginBottom:10, borderRadius:2 }} />)}
+          </div>
+        </div>
+        {/* Top bar */}
+        <div style={{ position:"absolute", top:0, left:0, right:0, padding:"12px 16px", display:"flex", justifyContent:"space-between", alignItems:"center", background:"linear-gradient(#000a,transparent)" }}>
+          <button onClick={onBack} style={{ background:`${C.card}aa`, border:`1px solid ${C.border}`, borderRadius:10, padding:"6px 14px", color:C.text, display:"flex", alignItems:"center", gap:6, cursor:"pointer", fontSize:13 }}>
+            {Ico.back(16)} Back
+          </button>
+          <div style={{ background:`${C.neon}22`, border:`1px solid ${C.neon}44`, borderRadius:8, padding:"4px 12px", color:C.neon, fontSize:12, fontFamily:"'Orbitron',sans-serif" }}>
+            AUTO DETECT
+          </div>
+          <div style={{ color:C.neon, fontSize:13, fontFamily:"'Orbitron',sans-serif" }}>{pages.length}pg</div>
+        </div>
+        {/* Pages strip */}
+        {pages.length > 0 && (
+          <div style={{ position:"absolute", bottom:90, left:0, right:0, padding:"0 16px", display:"flex", gap:8, overflowX:"auto" }}>
+            {pages.map((p, i) => (
+              <div key={p.id} style={{ minWidth:48, height:64, background:`linear-gradient(135deg,${C.card},${C.cardHi})`, borderRadius:6, border:`2px solid ${C.neon}66`, display:"flex", alignItems:"center", justifyContent:"center", fontSize:10, color:C.neon, fontFamily:"'Orbitron',sans-serif", flexShrink:0 }}>
+                P{i+1}
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+      {/* Capture bar */}
+      <div style={{ background:C.surface, padding:"20px 0 28px", display:"flex", alignItems:"center", justifyContent:"center", gap:40 }}>
+        <div style={{ width:44, height:44, borderRadius:"50%", border:`2px solid ${C.border}`, display:"flex", alignItems:"center", justifyContent:"center", color:C.muted, cursor:"pointer" }}>
+          {Ico.filter(20)}
+        </div>
+        {/* Main capture button */}
+        <button onClick={handleCapture} className="glow-btn" style={{ width:72, height:72, borderRadius:"50%", background:`linear-gradient(135deg,${C.neon2},${C.neon})`, border:"none", cursor:"pointer", display:"flex", alignItems:"center", justifyContent:"center", position:"relative" }}>
+          <div style={{ position:"absolute", inset:-6, borderRadius:"50%", border:`2px solid ${C.neon}44`, animation:"pulse-ring 1.5s infinite" }} />
+          {Ico.camera(28)}
+        </button>
+        {pages.length > 0 ? (
+          <button onClick={() => onCapture(pages)} style={{ width:44, height:44, borderRadius:"50%", background:`linear-gradient(135deg,${C.neon2},${C.neon})`, border:"none", cursor:"pointer", color:"w
