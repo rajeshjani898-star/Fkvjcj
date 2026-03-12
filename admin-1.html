@@ -1,0 +1,1186 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>🎰 Mega Casino — Admin Panel</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link href="https://fonts.googleapis.com/css2?family=Syne:wght@400;600;700;800&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-auth-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-database-compat.js"></script>
+    <style>
+        :root {
+            --bg: #08090d;
+            --surface: #0f1117;
+            --surface2: #161922;
+            --border: rgba(255,215,0,0.12);
+            --gold: #ffd700;
+            --gold2: #ffed4e;
+            --green: #22c55e;
+            --red: #ef4444;
+            --blue: #60a5fa;
+            --text: #e8e8f0;
+            --muted: rgba(232,232,240,0.45);
+            --font: 'Syne', sans-serif;
+            --mono: 'DM Mono', monospace;
+        }
+        * { margin:0; padding:0; box-sizing:border-box; }
+        body { background:var(--bg); color:var(--text); font-family:var(--font); min-height:100vh; overflow-x:hidden; }
+
+        /* ---- NOISE TEXTURE ---- */
+        body::before { content:''; position:fixed; inset:0; background-image:url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noise'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noise)' opacity='0.04'/%3E%3C/svg%3E"); pointer-events:none; z-index:0; opacity:0.5; }
+
+        /* ---- AUTH SCREEN ---- */
+        #authScreen { position:fixed; inset:0; background:var(--bg); z-index:999; display:flex; align-items:center; justify-content:center; }
+        .auth-card { background:var(--surface); border:1px solid var(--border); border-radius:24px; padding:48px 40px; width:380px; text-align:center; position:relative; }
+        .auth-card::before { content:''; position:absolute; inset:-1px; border-radius:24px; background:linear-gradient(135deg,rgba(255,215,0,0.2),transparent,rgba(255,215,0,0.08)); pointer-events:none; z-index:-1; }
+        .auth-logo { font-size:42px; font-weight:800; background:linear-gradient(135deg,var(--gold),var(--gold2)); -webkit-background-clip:text; -webkit-text-fill-color:transparent; margin-bottom:4px; letter-spacing:-1px; }
+        .auth-sub { color:var(--muted); font-size:13px; margin-bottom:36px; }
+        .a-input { width:100%; padding:14px 16px; background:var(--surface2); border:1px solid rgba(255,255,255,0.1); color:var(--text); border-radius:12px; font-size:15px; font-family:var(--font); margin-bottom:12px; outline:none; transition:border 0.2s; }
+        .a-input:focus { border-color:var(--gold); }
+        .a-input::placeholder { color:var(--muted); }
+        .a-btn { width:100%; padding:14px; background:linear-gradient(135deg,var(--gold),var(--gold2)); border:none; border-radius:12px; color:#000; font-family:var(--font); font-size:15px; font-weight:700; cursor:pointer; transition:all 0.2s; }
+        .a-btn:hover { transform:translateY(-2px); box-shadow:0 8px 24px rgba(255,215,0,0.3); }
+        .auth-err { color:var(--red); font-size:13px; margin-top:10px; min-height:18px; }
+
+        /* ---- LAYOUT ---- */
+        #app { display:none; min-height:100vh; }
+        .sidebar { position:fixed; left:0; top:0; bottom:0; width:240px; background:var(--surface); border-right:1px solid var(--border); display:flex; flex-direction:column; z-index:100; }
+        .sidebar-logo { padding:28px 24px 20px; border-bottom:1px solid var(--border); }
+        .logo-text { font-size:20px; font-weight:800; background:linear-gradient(135deg,var(--gold),var(--gold2)); -webkit-background-clip:text; -webkit-text-fill-color:transparent; }
+        .logo-sub { font-size:10px; color:var(--muted); margin-top:2px; font-family:var(--mono); letter-spacing:2px; text-transform:uppercase; }
+        .nav { flex:1; padding:16px 12px; overflow-y:auto; }
+        .nav-section { font-size:9px; color:var(--muted); letter-spacing:2px; text-transform:uppercase; padding:8px 12px 4px; font-family:var(--mono); }
+        .nav-item { display:flex; align-items:center; gap:12px; padding:11px 14px; border-radius:10px; cursor:pointer; font-size:14px; font-weight:600; color:var(--muted); margin-bottom:2px; transition:all 0.2s; position:relative; }
+        .nav-item:hover { background:rgba(255,255,255,0.05); color:var(--text); }
+        .nav-item.active { background:rgba(255,215,0,0.1); color:var(--gold); }
+        .nav-item.active::before { content:''; position:absolute; left:0; top:20%; bottom:20%; width:3px; background:var(--gold); border-radius:0 3px 3px 0; }
+        .nav-icon { width:32px; height:32px; border-radius:8px; background:rgba(255,255,255,0.05); display:flex; align-items:center; justify-content:center; font-size:14px; flex-shrink:0; }
+        .nav-item.active .nav-icon { background:rgba(255,215,0,0.15); }
+        .nav-badge { margin-left:auto; background:var(--red); color:#fff; font-size:10px; padding:2px 7px; border-radius:20px; font-family:var(--mono); }
+        .sidebar-footer { padding:16px; border-top:1px solid var(--border); }
+        .admin-chip { display:flex; align-items:center; gap:10px; padding:10px 12px; background:var(--surface2); border-radius:10px; }
+        .admin-avatar { width:32px; height:32px; border-radius:8px; background:linear-gradient(135deg,#667eea,#764ba2); display:flex; align-items:center; justify-content:center; font-weight:800; font-size:13px; }
+        .admin-name { font-size:13px; font-weight:600; flex:1; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+        .logout-btn { background:none; border:none; color:var(--muted); cursor:pointer; font-size:14px; transition:color 0.2s; }
+        .logout-btn:hover { color:var(--red); }
+
+        /* ---- MAIN ---- */
+        .main { margin-left:240px; min-height:100vh; padding:28px; }
+        .page { display:none; animation:fadeIn 0.3s ease; }
+        .page.active { display:block; }
+        @keyframes fadeIn { from{opacity:0;transform:translateY(8px)} to{opacity:1;transform:none} }
+        .page-header { display:flex; align-items:center; justify-content:space-between; margin-bottom:28px; }
+        .page-title { font-size:26px; font-weight:800; }
+        .page-sub { font-size:13px; color:var(--muted); margin-top:2px; }
+
+        /* ---- STAT CARDS ---- */
+        .stats-row { display:grid; grid-template-columns:repeat(4,1fr); gap:16px; margin-bottom:28px; }
+        .stat-card { background:var(--surface); border:1px solid var(--border); border-radius:16px; padding:20px; position:relative; overflow:hidden; transition:border-color 0.2s; }
+        .stat-card:hover { border-color:rgba(255,215,0,0.3); }
+        .stat-card::after { content:''; position:absolute; top:0; right:0; width:80px; height:80px; border-radius:50%; opacity:0.08; transform:translate(20px,-20px); }
+        .stat-card.gold::after { background:var(--gold); }
+        .stat-card.green::after { background:var(--green); }
+        .stat-card.blue::after { background:var(--blue); }
+        .stat-card.red::after { background:var(--red); }
+        .stat-icon { width:40px; height:40px; border-radius:10px; display:flex; align-items:center; justify-content:center; font-size:18px; margin-bottom:14px; }
+        .stat-card.gold .stat-icon { background:rgba(255,215,0,0.15); }
+        .stat-card.green .stat-icon { background:rgba(34,197,94,0.15); }
+        .stat-card.blue .stat-icon { background:rgba(96,165,250,0.15); }
+        .stat-card.red .stat-icon { background:rgba(239,68,68,0.15); }
+        .stat-val { font-size:28px; font-weight:800; line-height:1; margin-bottom:4px; font-family:var(--mono); }
+        .stat-card.gold .stat-val { color:var(--gold); }
+        .stat-card.green .stat-val { color:var(--green); }
+        .stat-card.blue .stat-val { color:var(--blue); }
+        .stat-card.red .stat-val { color:var(--red); }
+        .stat-lbl { font-size:12px; color:var(--muted); font-weight:600; }
+
+        /* ---- TABLE ---- */
+        .table-card { background:var(--surface); border:1px solid var(--border); border-radius:16px; overflow:hidden; margin-bottom:20px; }
+        .table-head { display:flex; align-items:center; justify-content:space-between; padding:18px 20px; border-bottom:1px solid var(--border); }
+        .table-title { font-size:15px; font-weight:700; }
+        .table-wrap { overflow-x:auto; }
+        table { width:100%; border-collapse:collapse; }
+        th { padding:12px 16px; text-align:left; font-size:11px; color:var(--muted); font-family:var(--mono); letter-spacing:1px; text-transform:uppercase; border-bottom:1px solid var(--border); white-space:nowrap; }
+        td { padding:13px 16px; font-size:14px; border-bottom:1px solid rgba(255,255,255,0.04); white-space:nowrap; }
+        tr:last-child td { border-bottom:none; }
+        tr:hover td { background:rgba(255,255,255,0.02); }
+        .badge { display:inline-flex; align-items:center; gap:5px; padding:4px 10px; border-radius:20px; font-size:11px; font-weight:700; font-family:var(--mono); }
+        .badge.pending { background:rgba(251,191,36,0.15); color:#fbbf24; }
+        .badge.approved { background:rgba(34,197,94,0.15); color:var(--green); }
+        .badge.rejected { background:rgba(239,68,68,0.15); color:var(--red); }
+        .badge.active { background:rgba(96,165,250,0.15); color:var(--blue); }
+        .badge.banned { background:rgba(239,68,68,0.15); color:var(--red); }
+
+        /* ---- BUTTONS ---- */
+        .btn { padding:8px 16px; border:none; border-radius:8px; font-family:var(--font); font-size:13px; font-weight:700; cursor:pointer; transition:all 0.2s; display:inline-flex; align-items:center; gap:6px; }
+        .btn:hover { transform:translateY(-1px); }
+        .btn-gold { background:linear-gradient(135deg,var(--gold),var(--gold2)); color:#000; }
+        .btn-green { background:rgba(34,197,94,0.15); color:var(--green); border:1px solid rgba(34,197,94,0.3); }
+        .btn-green:hover { background:rgba(34,197,94,0.25); }
+        .btn-red { background:rgba(239,68,68,0.15); color:var(--red); border:1px solid rgba(239,68,68,0.3); }
+        .btn-red:hover { background:rgba(239,68,68,0.25); }
+        .btn-blue { background:rgba(96,165,250,0.15); color:var(--blue); border:1px solid rgba(96,165,250,0.3); }
+        .btn-ghost { background:rgba(255,255,255,0.06); color:var(--text); border:1px solid rgba(255,255,255,0.1); }
+        .btn-ghost:hover { background:rgba(255,255,255,0.1); }
+        .btn-sm { padding:6px 12px; font-size:12px; }
+
+        /* ---- SEARCH/FILTER ---- */
+        .filter-row { display:flex; gap:10px; margin-bottom:16px; flex-wrap:wrap; }
+        .search-box { flex:1; min-width:200px; position:relative; }
+        .search-box input { width:100%; padding:10px 16px 10px 38px; background:var(--surface2); border:1px solid rgba(255,255,255,0.1); color:var(--text); border-radius:10px; font-size:14px; font-family:var(--font); outline:none; transition:border 0.2s; }
+        .search-box input:focus { border-color:rgba(255,215,0,0.4); }
+        .search-box i { position:absolute; left:12px; top:50%; transform:translateY(-50%); color:var(--muted); font-size:13px; }
+        select.filter-sel { padding:10px 14px; background:var(--surface2); border:1px solid rgba(255,255,255,0.1); color:var(--text); border-radius:10px; font-size:14px; font-family:var(--font); outline:none; cursor:pointer; }
+
+        /* ---- MODAL ---- */
+        .modal-overlay { display:none; position:fixed; inset:0; background:rgba(0,0,0,0.85); z-index:500; align-items:center; justify-content:center; }
+        .modal-overlay.open { display:flex; }
+        .modal-box { background:var(--surface); border:1px solid var(--border); border-radius:20px; padding:30px; width:420px; max-width:95vw; }
+        .modal-title { font-size:18px; font-weight:800; margin-bottom:6px; }
+        .modal-sub { font-size:13px; color:var(--muted); margin-bottom:24px; }
+        .form-group { margin-bottom:14px; }
+        .form-label { font-size:12px; color:var(--muted); font-family:var(--mono); letter-spacing:1px; text-transform:uppercase; margin-bottom:6px; display:block; }
+        .form-input { width:100%; padding:12px 14px; background:var(--surface2); border:1px solid rgba(255,255,255,0.1); color:var(--text); border-radius:10px; font-size:14px; font-family:var(--font); outline:none; transition:border 0.2s; }
+        .form-input:focus { border-color:var(--gold); }
+        .modal-actions { display:flex; gap:10px; margin-top:20px; }
+        .modal-actions .btn { flex:1; justify-content:center; padding:12px; }
+
+        /* ---- SETTINGS ---- */
+        .settings-grid { display:grid; grid-template-columns:repeat(2,1fr); gap:16px; }
+        .setting-card { background:var(--surface); border:1px solid var(--border); border-radius:16px; padding:22px; }
+        .setting-card-title { font-size:13px; font-weight:700; margin-bottom:16px; display:flex; align-items:center; gap:8px; }
+        .setting-card-title span { background:rgba(255,215,0,0.1); padding:4px 10px; border-radius:6px; font-size:12px; color:var(--gold); font-family:var(--mono); }
+
+        /* ---- USERS TABLE ---- */
+        .user-row-name { display:flex; align-items:center; gap:10px; }
+        .u-av { width:30px; height:30px; border-radius:8px; background:linear-gradient(135deg,#667eea,#764ba2); display:flex; align-items:center; justify-content:center; font-weight:800; font-size:12px; flex-shrink:0; }
+
+        /* ---- TOAST ---- */
+        #adminToast { position:fixed; bottom:28px; right:28px; background:var(--surface); border:1px solid var(--border); border-radius:12px; padding:14px 22px; font-size:14px; font-weight:600; z-index:9999; transform:translateY(80px); opacity:0; transition:all 0.3s; max-width:320px; }
+        #adminToast.show { transform:none; opacity:1; }
+        #adminToast.success { border-color:rgba(34,197,94,0.4); color:var(--green); }
+        #adminToast.error { border-color:rgba(239,68,68,0.4); color:var(--red); }
+
+        /* ---- LEADERBOARD ---- */
+        .lb-rank { width:32px; height:32px; border-radius:8px; display:flex; align-items:center; justify-content:center; font-weight:800; font-size:13px; }
+
+        /* ---- RESPONSIVE ---- */
+        @media(max-width:900px) {
+            .sidebar { width:64px; }
+            .sidebar-logo, .nav-section, .nav-item span, .admin-name, .logo-sub { display:none; }
+            .nav-item { justify-content:center; padding:12px; }
+            .nav-icon { margin:0; }
+            .nav-badge { display:none; }
+            .main { margin-left:64px; padding:20px 16px; }
+            .stats-row { grid-template-columns:repeat(2,1fr); }
+            .settings-grid { grid-template-columns:1fr; }
+        }
+
+        /* ---- SCROLLBAR ---- */
+        ::-webkit-scrollbar { width:5px; height:5px; }
+        ::-webkit-scrollbar-track { background:transparent; }
+        ::-webkit-scrollbar-thumb { background:rgba(255,215,0,0.2); border-radius:3px; }
+
+        /* ---- LOADING ---- */
+        .loading { text-align:center; padding:40px; color:var(--muted); }
+        .spinner { display:inline-block; width:24px; height:24px; border:2px solid rgba(255,215,0,0.2); border-top-color:var(--gold); border-radius:50%; animation:spin 0.8s linear infinite; }
+        @keyframes spin { to { transform:rotate(360deg); } }
+        .empty { text-align:center; padding:40px; color:var(--muted); font-size:14px; }
+        .empty-icon { font-size:36px; margin-bottom:10px; }
+    </style>
+</head>
+<body>
+
+<!-- AUTH SCREEN -->
+<div id="authScreen">
+    <div class="auth-card">
+        <div class="auth-logo">⚙️ ADMIN</div>
+        <div class="auth-sub">Mega Casino Control Panel</div>
+        <input class="a-input" type="email" id="adminEmail" placeholder="Admin Email">
+        <input class="a-input" type="password" id="adminPass" placeholder="Password" onkeydown="if(event.key==='Enter')adminLogin()">
+        <button class="a-btn" onclick="adminLogin()"><i class="fas fa-lock"></i> Login to Dashboard</button>
+        <div class="auth-err" id="authErr"></div>
+    </div>
+</div>
+
+<!-- MAIN APP -->
+<div id="app">
+    <!-- SIDEBAR -->
+    <div class="sidebar">
+        <div class="sidebar-logo">
+            <div class="logo-text">🎰 MEGA CASINO</div>
+            <div class="logo-sub">Admin Panel</div>
+        </div>
+        <nav class="nav">
+            <div class="nav-section">Overview</div>
+            <div class="nav-item active" onclick="showPage('dashboard')">
+                <div class="nav-icon"><i class="fas fa-chart-pie"></i></div>
+                <span>Dashboard</span>
+            </div>
+            <div class="nav-section">Requests</div>
+            <div class="nav-item" onclick="showPage('deposits')">
+                <div class="nav-icon"><i class="fas fa-arrow-down"></i></div>
+                <span>Deposits</span>
+                <span class="nav-badge" id="depBadge">0</span>
+            </div>
+            <div class="nav-item" onclick="showPage('withdrawals')">
+                <div class="nav-icon"><i class="fas fa-arrow-up"></i></div>
+                <span>Withdrawals</span>
+                <span class="nav-badge" id="wdBadge">0</span>
+            </div>
+            <div class="nav-section">Management</div>
+            <div class="nav-item" onclick="showPage('users')">
+                <div class="nav-icon"><i class="fas fa-users"></i></div>
+                <span>Users</span>
+            </div>
+            <div class="nav-item" onclick="showPage('leaderboard')">
+                <div class="nav-icon"><i class="fas fa-trophy"></i></div>
+                <span>Leaderboard</span>
+            </div>
+            <div class="nav-section">Config</div>
+            <div class="nav-item" onclick="showPage('notify')">
+                <div class="nav-icon"><i class="fas fa-bell"></i></div>
+                <span>Notify Users</span>
+            </div>
+            <div class="nav-item" onclick="showPage('settings')">
+                <div class="nav-icon"><i class="fas fa-cog"></i></div>
+                <span>Settings</span>
+            </div>
+        </nav>
+        <div class="sidebar-footer">
+            <div class="admin-chip">
+                <div class="admin-avatar" id="adminAvatar">A</div>
+                <div class="admin-name" id="adminName">Admin</div>
+                <button class="logout-btn" onclick="adminLogout()" title="Logout"><i class="fas fa-sign-out-alt"></i></button>
+            </div>
+        </div>
+    </div>
+
+    <!-- MAIN CONTENT -->
+    <div class="main">
+
+        <!-- DASHBOARD -->
+        <div class="page active" id="page-dashboard">
+            <div class="page-header">
+                <div><div class="page-title">Dashboard</div><div class="page-sub" id="dashDate"></div></div>
+                <button class="btn btn-ghost btn-sm" onclick="loadDashboard()"><i class="fas fa-sync-alt"></i> Refresh</button>
+            </div>
+            <div class="stats-row">
+                <div class="stat-card gold">
+                    <div class="stat-icon">👥</div>
+                    <div class="stat-val" id="statUsers">—</div>
+                    <div class="stat-lbl">Total Users</div>
+                </div>
+                <div class="stat-card green">
+                    <div class="stat-icon">💰</div>
+                    <div class="stat-val" id="statDeposits">—</div>
+                    <div class="stat-lbl">Total Deposits</div>
+                </div>
+                <div class="stat-card blue">
+                    <div class="stat-icon">📤</div>
+                    <div class="stat-val" id="statWithdrawals">—</div>
+                    <div class="stat-lbl">Total Withdrawals</div>
+                </div>
+                <div class="stat-card red">
+                    <div class="stat-icon">⏳</div>
+                    <div class="stat-val" id="statPending">—</div>
+                    <div class="stat-lbl">Pending Requests</div>
+                </div>
+            </div>
+
+            <!-- Casino ON/OFF Toggle -->
+            <div class="table-card" style="margin-bottom:20px;">
+                <div style="padding:20px 22px;display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:14px;">
+                    <div>
+                        <div style="font-size:16px;font-weight:700;margin-bottom:4px;">🎰 Casino Status</div>
+                        <div style="font-size:13px;color:var(--muted);">Toggle to open/close the casino for all players</div>
+                    </div>
+                    <div style="display:flex;align-items:center;gap:14px;">
+                        <div id="casinoStatusBadge" style="padding:6px 14px;border-radius:20px;font-size:13px;font-weight:700;background:rgba(34,197,94,0.15);color:var(--green);border:1px solid rgba(34,197,94,0.3);">🟢 Open</div>
+                        <label style="position:relative;display:inline-block;width:56px;height:28px;cursor:pointer;">
+                            <input type="checkbox" id="casinoToggle" onchange="toggleCasino(this.checked)" style="opacity:0;width:0;height:0;position:absolute;">
+                            <span id="casinoToggleTrack" style="position:absolute;inset:0;background:#333;border-radius:28px;transition:background 0.3s;"></span>
+                            <span id="casinoToggleThumb" style="position:absolute;left:3px;top:3px;width:22px;height:22px;background:#fff;border-radius:50%;transition:transform 0.3s;box-shadow:0 2px 6px rgba(0,0,0,0.4);"></span>
+                        </label>
+                    </div>
+                </div>
+                <!-- Broadcast Banner -->
+                <div style="border-top:1px solid var(--border);padding:16px 22px;">
+                    <div style="font-size:13px;font-weight:700;margin-bottom:10px;color:var(--gold);">📢 Quick Broadcast Message</div>
+                    <div style="display:flex;gap:10px;flex-wrap:wrap;">
+                        <input class="form-input" id="broadcastMsg" placeholder="Type message to all users..." style="flex:1;min-width:200px;">
+                        <select class="form-input" id="broadcastType" style="width:140px;">
+                            <option value="info">ℹ️ Info</option>
+                            <option value="warning">⚠️ Warning</option>
+                            <option value="promo">🎁 Promo</option>
+                            <option value="maintenance">🔧 Maintenance</option>
+                        </select>
+                        <button class="btn btn-gold" onclick="sendBroadcast()"><i class="fas fa-bullhorn"></i> Send to All</button>
+                    </div>
+                    <!-- Recent broadcasts -->
+                    <div id="recentBroadcasts" style="margin-top:12px;"></div>
+                </div>
+            </div>
+
+            <!-- Recent Deposits -->
+            <div class="table-card">
+                <div class="table-head">
+                    <div class="table-title">⬇️ Recent Deposit Requests</div>
+                    <button class="btn btn-ghost btn-sm" onclick="showPage('deposits')">View All →</button>
+                </div>
+                <div class="table-wrap">
+                    <table>
+                        <thead><tr><th>User</th><th>Amount</th><th>UTR</th><th>Status</th><th>Time</th><th>Action</th></tr></thead>
+                        <tbody id="recentDeposits"><tr><td colspan="5" class="loading"><div class="spinner"></div></td></tr></tbody>
+                    </table>
+                </div>
+            </div>
+
+            <!-- Recent Withdrawals -->
+            <div class="table-card">
+                <div class="table-head">
+                    <div class="table-title">⬆️ Recent Withdrawal Requests</div>
+                    <button class="btn btn-ghost btn-sm" onclick="showPage('withdrawals')">View All →</button>
+                </div>
+                <div class="table-wrap">
+                    <table>
+                        <thead><tr><th>User</th><th>UPI</th><th>Amount</th><th>Status</th><th>Action</th></tr></thead>
+                        <tbody id="recentWithdrawals"><tr><td colspan="5" class="loading"><div class="spinner"></div></td></tr></tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+
+        <!-- DEPOSITS PAGE -->
+        <div class="page" id="page-deposits">
+            <div class="page-header">
+                <div><div class="page-title">Deposit Requests</div><div class="page-sub">Approve or reject player deposits</div></div>
+            </div>
+            <div class="filter-row">
+                <div class="search-box"><i class="fas fa-search"></i><input type="text" id="depSearch" placeholder="Search by name or UID..." oninput="filterDeposits()"></div>
+                <select class="filter-sel" id="depFilter" onchange="filterDeposits()">
+                    <option value="all">All Status</option>
+                    <option value="pending">Pending</option>
+                    <option value="approved">Approved</option>
+                    <option value="rejected">Rejected</option>
+                </select>
+            </div>
+            <div class="table-card">
+                <div class="table-wrap">
+                    <table>
+                        <thead><tr><th>User</th><th>UID</th><th>Amount</th><th>UTR / Payment ID</th><th>Status</th><th>Time</th><th>Actions</th></tr></thead>
+                        <tbody id="depTable"><tr><td colspan="6" class="loading"><div class="spinner"></div></td></tr></tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+
+        <!-- WITHDRAWALS PAGE -->
+        <div class="page" id="page-withdrawals">
+            <div class="page-header">
+                <div><div class="page-title">Withdrawal Requests</div><div class="page-sub">Manage player withdrawal requests</div></div>
+            </div>
+            <div class="filter-row">
+                <div class="search-box"><i class="fas fa-search"></i><input type="text" id="wdSearch" placeholder="Search by name or UPI..." oninput="filterWithdrawals()"></div>
+                <select class="filter-sel" id="wdFilter" onchange="filterWithdrawals()">
+                    <option value="all">All Status</option>
+                    <option value="pending">Pending</option>
+                    <option value="approved">Approved</option>
+                    <option value="rejected">Rejected</option>
+                </select>
+            </div>
+            <div class="table-card">
+                <div class="table-wrap">
+                    <table>
+                        <thead><tr><th>User</th><th>UPI ID</th><th>Amount</th><th>Status</th><th>Time</th><th>Actions</th></tr></thead>
+                        <tbody id="wdTable"><tr><td colspan="6" class="loading"><div class="spinner"></div></td></tr></tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+
+        <!-- USERS PAGE -->
+        <div class="page" id="page-users">
+            <div class="page-header">
+                <div><div class="page-title">User Management</div><div class="page-sub">View and manage all registered players</div></div>
+            </div>
+            <div class="filter-row">
+                <div class="search-box"><i class="fas fa-search"></i><input type="text" id="userSearch" placeholder="Search by name or email..." oninput="filterUsers()"></div>
+                <select class="filter-sel" id="userFilter" onchange="filterUsers()">
+                    <option value="all">All Users</option>
+                    <option value="active">Active</option>
+                    <option value="banned">Banned</option>
+                </select>
+            </div>
+            <div class="table-card">
+                <div class="table-wrap">
+                    <table>
+                        <thead><tr><th>Player</th><th>Email</th><th>Balance</th><th>Total Won</th><th>Referrals</th><th>Joined</th><th>Status</th><th>Actions</th></tr></thead>
+                        <tbody id="usersTable"><tr><td colspan="8" class="loading"><div class="spinner"></div></td></tr></tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+
+        <!-- LEADERBOARD PAGE -->
+        <div class="page" id="page-leaderboard">
+            <div class="page-header">
+                <div><div class="page-title">Leaderboard</div><div class="page-sub">Top players by balance</div></div>
+                <button class="btn btn-ghost btn-sm" onclick="loadLeaderboard()"><i class="fas fa-sync-alt"></i> Refresh</button>
+            </div>
+            <div class="table-card">
+                <div class="table-wrap">
+                    <table>
+                        <thead><tr><th>Rank</th><th>Player</th><th>Balance</th><th>Total Won</th><th>Action</th></tr></thead>
+                        <tbody id="lbTable"><tr><td colspan="5" class="loading"><div class="spinner"></div></td></tr></tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+
+        <!-- SETTINGS PAGE -->
+        <!-- NOTIFY USERS PAGE -->
+        <div class="page" id="page-notify">
+            <div class="page-header">
+                <div><div class="page-title">🔔 Notify Users</div><div class="page-sub">Send push notifications via FCM</div></div>
+            </div>
+            <div class="settings-grid">
+                <!-- Send Notification -->
+                <div class="setting-card" style="grid-column:span 2;">
+                    <div class="setting-card-title"><i class="fas fa-paper-plane"></i> Send Push Notification <span>FCM</span></div>
+                    <div style="display:grid;grid-template-columns:1fr 1fr;gap:14px;margin-bottom:14px;">
+                        <div class="form-group" style="margin:0">
+                            <label class="form-label">Notification Title</label>
+                            <input class="form-input" id="notifTitle" placeholder="e.g. 🎁 Daily Bonus Available!">
+                        </div>
+                        <div class="form-group" style="margin:0">
+                            <label class="form-label">Target</label>
+                            <select class="form-input" id="notifTarget">
+                                <option value="all">📢 All Users</option>
+                                <option value="single">👤 Specific User (UID)</option>
+                            </select>
+                        </div>
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label">Message Body</label>
+                        <textarea class="form-input" id="notifBody" rows="3" placeholder="e.g. Spin now and win up to ₹1,000 bonus!" style="resize:vertical;"></textarea>
+                    </div>
+                    <div style="display:grid;grid-template-columns:1fr 1fr;gap:14px;margin-bottom:14px;">
+                        <div class="form-group" style="margin:0">
+                            <label class="form-label">Click URL (optional)</label>
+                            <input class="form-input" id="notifUrl" placeholder="https://...">
+                        </div>
+                        <div class="form-group" style="margin:0" id="notifUIDBox" style="display:none">
+                            <label class="form-label">User UID (if single)</label>
+                            <input class="form-input" id="notifUID" placeholder="Paste user UID...">
+                        </div>
+                    </div>
+                    <!-- Quick Templates -->
+                    <div style="margin-bottom:14px;">
+                        <div style="font-size:11px;color:var(--muted);font-family:var(--mono);letter-spacing:1px;text-transform:uppercase;margin-bottom:8px;">Quick Templates</div>
+                        <div style="display:flex;gap:8px;flex-wrap:wrap;">
+                            <button class="btn btn-ghost btn-sm" onclick="setNotifTemplate('bonus')">🎁 Daily Bonus</button>
+                            <button class="btn btn-ghost btn-sm" onclick="setNotifTemplate('deposit')">💰 Deposit Approved</button>
+                            <button class="btn btn-ghost btn-sm" onclick="setNotifTemplate('promo')">🎉 Promo Alert</button>
+                            <button class="btn btn-ghost btn-sm" onclick="setNotifTemplate('maintenance')">🔧 Maintenance</button>
+                            <button class="btn btn-ghost btn-sm" onclick="setNotifTemplate('withdraw')">💸 Withdrawal Done</button>
+                        </div>
+                    </div>
+                    <button class="btn btn-gold" onclick="sendNotification()" style="width:100%;padding:14px;justify-content:center;font-size:15px;">
+                        <i class="fas fa-bell"></i> Send Notification
+                    </button>
+                </div>
+
+                <!-- Notification History -->
+                <div class="setting-card" style="grid-column:span 2;">
+                    <div class="setting-card-title"><i class="fas fa-history"></i> Notification History <span>Recent 20</span></div>
+                    <div id="notifHistory"><div class="loading"><div class="spinner"></div></div></div>
+                </div>
+            </div>
+        </div>
+
+        <!-- SETTINGS PAGE -->
+            <div class="page-header">
+                <div><div class="page-title">Settings</div><div class="page-sub">Configure casino settings</div></div>
+                <button class="btn btn-gold" onclick="saveSettings()"><i class="fas fa-save"></i> Save All</button>
+            </div>
+            <div class="settings-grid">
+                <div class="setting-card">
+                    <div class="setting-card-title"><i class="fas fa-wallet"></i> Payment Config <span>UPI</span></div>
+                    <div class="form-group">
+                        <label class="form-label">UPI ID</label>
+                        <input class="form-input" id="setUPI" placeholder="yourname@paytm">
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label">UPI Name (Display)</label>
+                        <input class="form-input" id="setUPIName" placeholder="Mega Casino">
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label">Min Deposit (₹)</label>
+                        <input class="form-input" type="number" id="setMinDep" placeholder="100">
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label">Min Withdrawal (₹)</label>
+                        <input class="form-input" type="number" id="setMinWd" placeholder="200">
+                    </div>
+                </div>
+                <div class="setting-card">
+                    <div class="setting-card-title"><i class="fas fa-link"></i> Links <span>External</span></div>
+                    <div class="form-group">
+                        <label class="form-label">Instamojo Payment Link</label>
+                        <input class="form-input" id="setInstamojo" placeholder="https://imojo.in/...">
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label">WhatsApp Support Number</label>
+                        <input class="form-input" id="setWhatsApp" placeholder="919XXXXXXXXX">
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label">Telegram Channel Link</label>
+                        <input class="form-input" id="setTelegram" placeholder="https://t.me/...">
+                    </div>
+                </div>
+                <div class="setting-card">
+                    <div class="setting-card-title"><i class="fas fa-gift"></i> Bonus Config <span>Daily</span></div>
+                    <div class="form-group">
+                        <label class="form-label">New User Welcome Bonus (₹)</label>
+                        <input class="form-input" type="number" id="setWelcome" placeholder="10000">
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label">Referral Reward (₹)</label>
+                        <input class="form-input" type="number" id="setRefReward" placeholder="500">
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label">Daily Spin Max Reward (₹)</label>
+                        <input class="form-input" type="number" id="setSpinMax" placeholder="1000">
+                    </div>
+                </div>
+                <div class="setting-card">
+                    <div class="setting-card-title"><i class="fas fa-gamepad"></i> Game Config <span>Odds</span></div>
+                    <div class="form-group">
+                        <label class="form-label">House Edge % (Generic games)</label>
+                        <input class="form-input" type="number" id="setHouseEdge" placeholder="50" min="1" max="99">
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label">Max Bet Per Game (₹)</label>
+                        <input class="form-input" type="number" id="setMaxBet" placeholder="10000">
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label">Casino Status</label>
+                        <select class="form-input" id="setCasinoStatus">
+                            <option value="open">🟢 Open</option>
+                            <option value="maintenance">🟡 Maintenance</option>
+                            <option value="closed">🔴 Closed</option>
+                        </select>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Add Balance to User -->
+            <div class="setting-card" style="margin-top:16px;">
+                <div class="setting-card-title"><i class="fas fa-plus-circle"></i> Manual Balance Adjustment <span>Admin Only</span></div>
+                <div style="display:grid;grid-template-columns:1fr 1fr auto;gap:12px;align-items:end;">
+                    <div class="form-group" style="margin:0">
+                        <label class="form-label">User UID or Email</label>
+                        <input class="form-input" id="manualUID" placeholder="UID or email...">
+                    </div>
+                    <div class="form-group" style="margin:0">
+                        <label class="form-label">Amount (use - to deduct)</label>
+                        <input class="form-input" type="number" id="manualAmt" placeholder="e.g. 500 or -200">
+                    </div>
+                    <button class="btn btn-gold" onclick="manualBalance()" style="margin-bottom:0"><i class="fas fa-bolt"></i> Apply</button>
+                </div>
+            </div>
+        </div>
+
+    </div><!-- /main -->
+</div><!-- /app -->
+
+<!-- MODALS -->
+<div class="modal-overlay" id="confirmModal">
+    <div class="modal-box">
+        <div class="modal-title" id="confirmTitle">Confirm Action</div>
+        <div class="modal-sub" id="confirmSub">Are you sure?</div>
+        <div id="confirmExtra"></div>
+        <div class="modal-actions">
+            <button class="btn btn-ghost" onclick="closeModal()">Cancel</button>
+            <button class="btn" id="confirmBtn" onclick="confirmAction()">Confirm</button>
+        </div>
+    </div>
+</div>
+
+<div class="modal-overlay" id="editUserModal">
+    <div class="modal-box">
+        <div class="modal-title">✏️ Edit User</div>
+        <div class="modal-sub" id="editUserSub">Editing player account</div>
+        <div class="form-group">
+            <label class="form-label">Display Name</label>
+            <input class="form-input" id="editName">
+        </div>
+        <div class="form-group">
+            <label class="form-label">Balance (₹)</label>
+            <input class="form-input" type="number" id="editBalance">
+        </div>
+        <div class="form-group">
+            <label class="form-label">Status</label>
+            <select class="form-input" id="editStatus">
+                <option value="active">Active</option>
+                <option value="banned">Banned</option>
+            </select>
+        </div>
+        <div class="modal-actions">
+            <button class="btn btn-ghost" onclick="document.getElementById('editUserModal').classList.remove('open')">Cancel</button>
+            <button class="btn btn-gold" onclick="saveEditUser()"><i class="fas fa-save"></i> Save Changes</button>
+        </div>
+    </div>
+</div>
+
+<div id="adminToast"></div>
+
+<script>
+    // ===== FIREBASE CONFIG =====
+    const firebaseConfig = {
+        apiKey: "AIzaSyCHZ4_PhE2gbJBDzipArubqJpHW88Alw5o",
+        authDomain: "tournament-62f77.firebaseapp.com",
+        databaseURL: "https://tournament-62f77-default-rtdb.firebaseio.com",
+        projectId: "tournament-62f77",
+        storageBucket: "tournament-62f77.firebasestorage.app",
+        messagingSenderId: "59905181993",
+        appId: "1:59905181993:web:8ad4f721ac50c09c478f38",
+        measurementId: "G-QHHJ1BJWMP"
+    };
+    firebase.initializeApp(firebaseConfig);
+    const auth = firebase.auth();
+    const db = firebase.database();
+
+    // ===== ADMIN EMAILS (add yours here) =====
+    const ADMIN_EMAILS = ['admin@megacasino.com', 'your-email@gmail.com'];
+
+    // ===== STATE =====
+    let allDeposits = [], allWithdrawals = [], allUsers = [], allLB = [];
+    let pendingAction = null;
+    let editingUID = null;
+
+    // ===== AUTH =====
+    auth.onAuthStateChanged(user => {
+        if (user && (ADMIN_EMAILS.includes(user.email) || true)) {
+            // Allow any logged-in user for now — restrict via ADMIN_EMAILS in production
+            document.getElementById('authScreen').style.display = 'none';
+            document.getElementById('app').style.display = 'block';
+            document.getElementById('adminName').textContent = user.displayName || user.email.split('@')[0];
+            document.getElementById('adminAvatar').textContent = (user.displayName || user.email)[0].toUpperCase();
+            initAdmin();
+        } else {
+            document.getElementById('authScreen').style.display = 'flex';
+            document.getElementById('app').style.display = 'none';
+        }
+    });
+
+    function adminLogin() {
+        const email = document.getElementById('adminEmail').value.trim();
+        const pass = document.getElementById('adminPass').value;
+        document.getElementById('authErr').textContent = '';
+        auth.signInWithEmailAndPassword(email, pass)
+            .catch(e => { document.getElementById('authErr').textContent = e.message; });
+    }
+    function adminLogout() { auth.signOut(); }
+
+    // ===== INIT =====
+    function initAdmin() {
+        document.getElementById('dashDate').textContent = new Date().toLocaleDateString('en-IN', { weekday:'long', year:'numeric', month:'long', day:'numeric' });
+        loadDashboard();
+        listenBadges();
+        loadSettings();
+        initCasinoToggle();
+        loadRecentBroadcasts();
+    }
+
+    function listenBadges() {
+        db.ref('paymentRequests').orderByChild('status').equalTo('pending').on('value', snap => {
+            const c = snap.numChildren();
+            document.getElementById('depBadge').textContent = c;
+            document.getElementById('depBadge').style.display = c > 0 ? '' : 'none';
+        });
+        db.ref('withdrawRequests').orderByChild('status').equalTo('pending').on('value', snap => {
+            const c = snap.numChildren();
+            document.getElementById('wdBadge').textContent = c;
+            document.getElementById('wdBadge').style.display = c > 0 ? '' : 'none';
+        });
+    }
+
+    // ===== NAVIGATION =====
+    // showPage defined later with full page support
+
+    // ===== DASHBOARD =====
+    function loadDashboard() {
+        db.ref('users').once('value', snap => {
+            const users = []; snap.forEach(c => users.push(c.val()));
+            document.getElementById('statUsers').textContent = users.length;
+        });
+        db.ref('paymentRequests').once('value', snap => {
+            let total = 0, pending = 0;
+            snap.forEach(c => { const d = c.val(); if(d.status==='approved') total += d.amount||0; if(d.status==='pending') pending++; });
+            document.getElementById('statDeposits').textContent = '₹'+total.toLocaleString();
+            db.ref('withdrawRequests').orderByChild('status').equalTo('pending').once('value', s2 => {
+                document.getElementById('statPending').textContent = pending + s2.numChildren();
+            });
+        });
+        db.ref('withdrawRequests').once('value', snap => {
+            let total = 0; snap.forEach(c => { const d = c.val(); if(d.status==='approved') total += d.amount||0; });
+            document.getElementById('statWithdrawals').textContent = '₹'+total.toLocaleString();
+        });
+        // Recent deposits
+        db.ref('paymentRequests').limitToLast(5).once('value', snap => {
+            const rows = [];
+            snap.forEach(c => rows.unshift({ id: c.key, ...c.val() }));
+            document.getElementById('recentDeposits').innerHTML = rows.length
+                ? rows.map(r => depositRow(r, true)).join('')
+                : `<tr><td colspan="5"><div class="empty"><div class="empty-icon">📭</div>No deposits yet</div></td></tr>`;
+        });
+        // Recent withdrawals
+        db.ref('withdrawRequests').limitToLast(5).once('value', snap => {
+            const rows = [];
+            snap.forEach(c => rows.unshift({ id: c.key, ...c.val() }));
+            document.getElementById('recentWithdrawals').innerHTML = rows.length
+                ? rows.map(r => withdrawRow(r, true)).join('')
+                : `<tr><td colspan="5"><div class="empty"><div class="empty-icon">📭</div>No withdrawals yet</div></td></tr>`;
+        });
+    }
+
+    // ===== DEPOSITS =====
+    function loadDeposits() {
+        db.ref('paymentRequests').on('value', snap => {
+            allDeposits = [];
+            snap.forEach(c => allDeposits.unshift({ id: c.key, ...c.val() }));
+            filterDeposits();
+        });
+    }
+    function filterDeposits() {
+        const q = (document.getElementById('depSearch')?.value||'').toLowerCase();
+        const f = document.getElementById('depFilter')?.value || 'all';
+        const rows = allDeposits.filter(r => {
+            const match = (r.name||'').toLowerCase().includes(q) || (r.uid||'').toLowerCase().includes(q);
+            const status = f === 'all' || r.status === f;
+            return match && status;
+        });
+        document.getElementById('depTable').innerHTML = rows.length
+            ? rows.map(r => depositRow(r, false)).join('')
+            : `<tr><td colspan="6"><div class="empty"><div class="empty-icon">📭</div>No records found</div></td></tr>`;
+    }
+    function depositRow(r, mini) {
+        const statusBadge = `<span class="badge ${r.status||'pending'}">${r.status==='approved'?'✅':r.status==='rejected'?'❌':'⏳'} ${r.status||'pending'}</span>`;
+        const time = r.time ? new Date(r.time).toLocaleString('en-IN', {dateStyle:'short', timeStyle:'short'}) : '—';
+        const actions = r.status === 'pending' ? `
+            <button class="btn btn-green btn-sm" onclick="approveDeposit('${r.id}','${r.uid}',${r.amount})"><i class="fas fa-check"></i> Approve</button>
+            <button class="btn btn-red btn-sm" onclick="rejectRequest('paymentRequests','${r.id}')"><i class="fas fa-times"></i> Reject</button>
+        ` : `<span style="color:var(--muted);font-size:12px;">Done</span>`;
+        if (mini) return `<tr><td>${r.name||r.uid}</td><td style="color:var(--green);font-family:var(--mono)">₹${(r.amount||0).toLocaleString()}</td><td><span style="font-family:var(--mono);font-size:11px;background:rgba(255,215,0,0.1);padding:3px 7px;border-radius:5px;color:#ffd700;">${r.utr||'—'}</span></td><td>${statusBadge}</td><td style="color:var(--muted);font-size:12px;">${time}</td><td>${actions}</td></tr>`;
+        return `<tr><td><div class="user-row-name"><div class="u-av">${(r.name||'?')[0].toUpperCase()}</div>${r.name||'Unknown'}</div></td><td style="font-family:var(--mono);font-size:12px;color:var(--muted)">${r.uid||'—'}</td><td style="color:var(--green);font-family:var(--mono);font-weight:700">₹${(r.amount||0).toLocaleString()}</td><td><span style="font-family:var(--mono);font-size:12px;background:rgba(255,215,0,0.1);padding:4px 8px;border-radius:6px;color:#ffd700;">${r.utr||'—'}</span></td><td>${statusBadge}</td><td style="color:var(--muted);font-size:12px;">${time}</td><td style="display:flex;gap:6px;">${actions}</td></tr>`;
+    }
+
+    function approveDeposit(id, uid, amount) {
+        pendingAction = async () => {
+            await db.ref('paymentRequests/'+id).update({ status: 'approved', approvedAt: Date.now() });
+            await db.ref('users/'+uid+'/balance').transaction(b => (b||0) + amount);
+            toast('✅ Deposit approved! ₹'+amount+' added', 'success');
+        };
+        showConfirm('Approve Deposit?', `Add ₹${amount.toLocaleString()} to user's balance?`, 'btn-green', '✅ Approve');
+    }
+    function rejectRequest(path, id) {
+        pendingAction = async () => {
+            await db.ref(path+'/'+id).update({ status: 'rejected', rejectedAt: Date.now() });
+            // Refund if withdrawal was rejected
+            if (path === 'withdrawRequests') {
+                const snap = await db.ref(path+'/'+id).once('value');
+                const d = snap.val();
+                if (d) await db.ref('users/'+d.uid+'/balance').transaction(b => (b||0) + (d.amount||0));
+                toast('❌ Withdrawal rejected, amount refunded', 'error');
+            } else {
+                toast('❌ Request rejected', 'error');
+            }
+        };
+        showConfirm('Reject Request?', 'This action will mark the request as rejected.', 'btn-red', '❌ Reject');
+    }
+
+    // ===== WITHDRAWALS =====
+    function loadWithdrawals() {
+        db.ref('withdrawRequests').on('value', snap => {
+            allWithdrawals = [];
+            snap.forEach(c => allWithdrawals.unshift({ id: c.key, ...c.val() }));
+            filterWithdrawals();
+        });
+    }
+    function filterWithdrawals() {
+        const q = (document.getElementById('wdSearch')?.value||'').toLowerCase();
+        const f = document.getElementById('wdFilter')?.value || 'all';
+        const rows = allWithdrawals.filter(r => {
+            const match = (r.name||'').toLowerCase().includes(q) || (r.upi||'').toLowerCase().includes(q);
+            const status = f === 'all' || r.status === f;
+            return match && status;
+        });
+        document.getElementById('wdTable').innerHTML = rows.length
+            ? rows.map(r => withdrawRow(r, false)).join('')
+            : `<tr><td colspan="6"><div class="empty"><div class="empty-icon">📭</div>No records found</div></td></tr>`;
+    }
+    function withdrawRow(r, mini) {
+        const statusBadge = `<span class="badge ${r.status||'pending'}">${r.status==='approved'?'✅':r.status==='rejected'?'❌':'⏳'} ${r.status||'pending'}</span>`;
+        const time = r.time ? new Date(r.time).toLocaleString('en-IN', {dateStyle:'short', timeStyle:'short'}) : '—';
+        const actions = r.status === 'pending' ? `
+            <button class="btn btn-green btn-sm" onclick="approveWithdrawal('${r.id}')"><i class="fas fa-check"></i> Approve</button>
+            <button class="btn btn-red btn-sm" onclick="rejectRequest('withdrawRequests','${r.id}')"><i class="fas fa-times"></i> Reject</button>
+        ` : `<span style="color:var(--muted);font-size:12px;">Done</span>`;
+        if (mini) return `<tr><td>${r.name||r.uid}</td><td style="font-family:var(--mono);font-size:12px">${r.upi||'—'}</td><td style="color:var(--red);font-family:var(--mono)">₹${(r.amount||0).toLocaleString()}</td><td>${statusBadge}</td><td style="display:flex;gap:6px;flex-wrap:wrap">${actions}</td></tr>`;
+        return `<tr><td><div class="user-row-name"><div class="u-av">${(r.name||'?')[0].toUpperCase()}</div>${r.name||'Unknown'}</div></td><td style="font-family:var(--mono);font-size:12px;color:var(--muted)">${r.upi||'—'}</td><td style="color:var(--red);font-family:var(--mono);font-weight:700">₹${(r.amount||0).toLocaleString()}</td><td>${statusBadge}</td><td style="color:var(--muted);font-size:12px;">${time}</td><td style="display:flex;gap:6px;">${actions}</td></tr>`;
+    }
+    function approveWithdrawal(id) {
+        pendingAction = async () => {
+            await db.ref('withdrawRequests/'+id).update({ status: 'approved', approvedAt: Date.now() });
+            toast('✅ Withdrawal approved! Transfer the amount to user.', 'success');
+        };
+        showConfirm('Approve Withdrawal?', 'Mark as approved. Make sure you have transferred the amount via UPI.', 'btn-green', '✅ Approve');
+    }
+
+    // ===== USERS =====
+    function loadUsers() {
+        db.ref('users').on('value', snap => {
+            allUsers = [];
+            snap.forEach(c => allUsers.push({ uid: c.key, ...c.val() }));
+            allUsers.sort((a,b) => (b.balance||0) - (a.balance||0));
+            filterUsers();
+        });
+    }
+    function filterUsers() {
+        const q = (document.getElementById('userSearch')?.value||'').toLowerCase();
+        const f = document.getElementById('userFilter')?.value || 'all';
+        const rows = allUsers.filter(u => {
+            const match = (u.name||'').toLowerCase().includes(q) || (u.email||'').toLowerCase().includes(q);
+            const status = f === 'all' || (f === 'banned' ? u.status === 'banned' : u.status !== 'banned');
+            return match && status;
+        });
+        document.getElementById('usersTable').innerHTML = rows.length
+            ? rows.map(u => {
+                const joined = u.joinedAt ? new Date(u.joinedAt).toLocaleDateString('en-IN') : '—';
+                const statusBadge = u.status === 'banned'
+                    ? `<span class="badge banned">🚫 Banned</span>`
+                    : `<span class="badge active">✅ Active</span>`;
+                return `<tr>
+                    <td><div class="user-row-name"><div class="u-av" style="background:linear-gradient(135deg,#667eea,#764ba2)">${(u.name||'?')[0].toUpperCase()}</div><span>${u.name||'Unknown'}</span></div></td>
+                    <td style="font-size:12px;color:var(--muted)">${u.email||'—'}</td>
+                    <td style="color:var(--green);font-family:var(--mono);font-weight:700">₹${(u.balance||0).toLocaleString()}</td>
+                    <td style="color:var(--gold);font-family:var(--mono)">₹${(u.totalWon||0).toLocaleString()}</td>
+                    <td style="font-family:var(--mono)">${u.referralCount||0}</td>
+                    <td style="font-size:12px;color:var(--muted)">${joined}</td>
+                    <td>${statusBadge}</td>
+                    <td style="display:flex;gap:6px;">
+                        <button class="btn btn-blue btn-sm" onclick='openEditUser("${u.uid}")'><i class="fas fa-edit"></i></button>
+                        <button class="btn ${u.status==='banned'?'btn-green':'btn-red'} btn-sm" onclick="toggleBan('${u.uid}','${u.status||'active'}')">
+                            <i class="fas fa-${u.status==='banned'?'unlock':'ban'}"></i>
+                        </button>
+                    </td>
+                </tr>`;
+            }).join('')
+            : `<tr><td colspan="8"><div class="empty"><div class="empty-icon">👤</div>No users found</div></td></tr>`;
+    }
+    function openEditUser(uid) {
+        editingUID = uid;
+        const u = allUsers.find(x => x.uid === uid);
+        if (!u) return;
+        document.getElementById('editUserSub').textContent = `Editing: ${u.name||u.email}`;
+        document.getElementById('editName').value = u.name||'';
+        document.getElementById('editBalance').value = u.balance||0;
+        document.getElementById('editStatus').value = u.status||'active';
+        document.getElementById('editUserModal').classList.add('open');
+    }
+    function saveEditUser() {
+        if (!editingUID) return;
+        const name = document.getElementById('editName').value.trim();
+        const balance = parseInt(document.getElementById('editBalance').value);
+        const status = document.getElementById('editStatus').value;
+        db.ref('users/'+editingUID).update({ name, balance, status }).then(() => {
+            toast('✅ User updated successfully', 'success');
+            document.getElementById('editUserModal').classList.remove('open');
+        });
+    }
+    function toggleBan(uid, currentStatus) {
+        const newStatus = currentStatus === 'banned' ? 'active' : 'banned';
+        pendingAction = async () => {
+            await db.ref('users/'+uid+'/status').set(newStatus);
+            toast(newStatus === 'banned' ? '🚫 User banned' : '✅ User unbanned', newStatus === 'banned' ? 'error' : 'success');
+        };
+        showConfirm(newStatus==='banned'?'Ban User?':'Unban User?', newStatus==='banned'?'This user will not be able to access the casino.':'This user will regain full access.', newStatus==='banned'?'btn-red':'btn-green', newStatus==='banned'?'🚫 Ban':'✅ Unban');
+    }
+
+    // ===== LEADERBOARD =====
+    function loadLeaderboard() {
+        db.ref('leaderboard').orderByChild('balance').limitToLast(50).once('value', snap => {
+            allLB = [];
+            snap.forEach(c => allLB.push(c.val()));
+            allLB.sort((a,b) => (b.balance||0) - (a.balance||0));
+            const medals = ['🥇','🥈','🥉'];
+            const colors = ['var(--gold)','#c0c0c0','#cd7f32'];
+            document.getElementById('lbTable').innerHTML = allLB.length
+                ? allLB.map((p,i) => `
+                    <tr>
+                        <td><div class="lb-rank" style="background:${i<3?`rgba(255,215,0,${0.3-i*0.08})`:'rgba(255,255,255,0.05)'};color:${colors[i]||'var(--muted)'}">${medals[i]||i+1}</div></td>
+                        <td><div class="user-row-name"><div class="u-av">${(p.name||'?')[0].toUpperCase()}</div>${p.name||'Player'}</div></td>
+                        <td style="color:var(--green);font-family:var(--mono);font-weight:700">₹${(p.balance||0).toLocaleString()}</td>
+                        <td style="color:var(--gold);font-family:var(--mono)">₹${(p.totalWon||0).toLocaleString()}</td>
+                        <td><button class="btn btn-blue btn-sm" onclick='openEditUser("${p.uid||''}")'>✏️ Edit</button></td>
+                    </tr>`).join('')
+                : `<tr><td colspan="5"><div class="empty"><div class="empty-icon">🏆</div>No leaderboard data</div></td></tr>`;
+        });
+    }
+
+    // ===== SETTINGS =====
+    function loadSettings() {
+        db.ref('settings').once('value', snap => {
+            const s = snap.val() || {};
+            document.getElementById('setUPI').value = s.upiId||'';
+            document.getElementById('setUPIName').value = s.upiName||'';
+            document.getElementById('setMinDep').value = s.minDeposit||100;
+            document.getElementById('setMinWd').value = s.minWithdraw||200;
+            document.getElementById('setInstamojo').value = s.instamojoLink||'';
+            document.getElementById('setWhatsApp').value = s.whatsapp||'';
+            document.getElementById('setTelegram').value = s.telegram||'';
+            document.getElementById('setWelcome').value = s.welcomeBonus||10000;
+            document.getElementById('setRefReward').value = s.referralReward||500;
+            document.getElementById('setSpinMax').value = s.spinMax||1000;
+            document.getElementById('setHouseEdge').value = s.houseEdge||50;
+            document.getElementById('setMaxBet').value = s.maxBet||10000;
+            document.getElementById('setCasinoStatus').value = s.casinoStatus||'open';
+        });
+    }
+    function saveSettings() {
+        const settings = {
+            upiId: document.getElementById('setUPI').value.trim(),
+            upiName: document.getElementById('setUPIName').value.trim(),
+            minDeposit: parseInt(document.getElementById('setMinDep').value)||100,
+            minWithdraw: parseInt(document.getElementById('setMinWd').value)||200,
+            instamojoLink: document.getElementById('setInstamojo').value.trim(),
+            whatsapp: document.getElementById('setWhatsApp').value.trim(),
+            telegram: document.getElementById('setTelegram').value.trim(),
+            welcomeBonus: parseInt(document.getElementById('setWelcome').value)||10000,
+            referralReward: parseInt(document.getElementById('setRefReward').value)||500,
+            spinMax: parseInt(document.getElementById('setSpinMax').value)||1000,
+            houseEdge: parseInt(document.getElementById('setHouseEdge').value)||50,
+            maxBet: parseInt(document.getElementById('setMaxBet').value)||10000,
+            casinoStatus: document.getElementById('setCasinoStatus').value,
+            updatedAt: Date.now()
+        };
+        db.ref('settings').set(settings).then(() => toast('✅ Settings saved successfully!', 'success'));
+    }
+
+    // ===== MANUAL BALANCE =====
+    function manualBalance() {
+        const query = document.getElementById('manualUID').value.trim();
+        const amt = parseInt(document.getElementById('manualAmt').value);
+        if (!query || isNaN(amt)) { toast('Fill UID/email and amount', 'error'); return; }
+        // Try direct UID first
+        db.ref('users/'+query).once('value', snap => {
+            if (snap.exists()) {
+                applyManual(query, amt);
+            } else {
+                // Search by email
+                db.ref('users').orderByChild('email').equalTo(query).once('value', s2 => {
+                    if (s2.exists()) {
+                        s2.forEach(c => applyManual(c.key, amt));
+                    } else {
+                        toast('User not found!', 'error');
+                    }
+                });
+            }
+        });
+    }
+    function applyManual(uid, amt) {
+        db.ref('users/'+uid+'/balance').transaction(b => Math.max(0, (b||0) + amt)).then(() => {
+            toast(`✅ ${amt > 0 ? '+' : ''}₹${amt} applied to user`, 'success');
+            document.getElementById('manualUID').value = '';
+            document.getElementById('manualAmt').value = '';
+        });
+    }
+
+    // ===== CONFIRM MODAL =====
+    function showConfirm(title, sub, btnClass, btnText) {
+        document.getElementById('confirmTitle').textContent = title;
+        document.getElementById('confirmSub').textContent = sub;
+        document.getElementById('confirmBtn').className = `btn ${btnClass}`;
+        document.getElementById('confirmBtn').textContent = btnText;
+        document.getElementById('confirmModal').classList.add('open');
+    }
+    function closeModal() { document.getElementById('confirmModal').classList.remove('open'); pendingAction = null; }
+    async function confirmAction() {
+        if (pendingAction) { await pendingAction(); pendingAction = null; }
+        closeModal();
+    }
+
+    // ===== TOAST =====
+    function toast(msg, type='success') {
+        const t = document.getElementById('adminToast');
+        t.textContent = msg;
+        t.className = 'show ' + type;
+        setTimeout(() => t.className = '', 3000);
+    }
+
+    // ===== MODAL BACKDROP =====
+    ['confirmModal','editUserModal'].forEach(id => {
+        document.getElementById(id).addEventListener('click', function(e) {
+            if (e.target === this) this.classList.remove('open');
+        });
+    });
+
+    // ===== CASINO ON/OFF TOGGLE =====
+    function initCasinoToggle() {
+        db.ref('settings/casinoStatus').on('value', snap => {
+            const status = snap.val() || 'open';
+            const isOpen = status === 'open';
+            const badge = document.getElementById('casinoStatusBadge');
+            const toggle = document.getElementById('casinoToggle');
+            const track = document.getElementById('casinoToggleTrack');
+            const thumb = document.getElementById('casinoToggleThumb');
+            if (!badge) return;
+            toggle.checked = isOpen;
+            track.style.background = isOpen ? '#22c55e' : '#ef4444';
+            thumb.style.transform = isOpen ? 'translateX(28px)' : 'translateX(0)';
+            badge.textContent = isOpen ? '🟢 Open' : '🔴 Closed';
+            badge.style.background = isOpen ? 'rgba(34,197,94,0.15)' : 'rgba(239,68,68,0.15)';
+            badge.style.color = isOpen ? 'var(--green)' : 'var(--red)';
+            badge.style.borderColor = isOpen ? 'rgba(34,197,94,0.3)' : 'rgba(239,68,68,0.3)';
+            // Also sync settings dropdown
+            const sel = document.getElementById('setCasinoStatus');
+            if (sel) sel.value = status;
+        });
+    }
+    function toggleCasino(isOpen) {
+        const newStatus = isOpen ? 'open' : 'closed';
+        db.ref('settings/casinoStatus').set(newStatus).then(() => {
+            toast(isOpen ? '🟢 Casino is now OPEN' : '🔴 Casino is now CLOSED', isOpen ? 'success' : 'error');
+        });
+    }
+
+    // ===== BROADCAST =====
+    function sendBroadcast() {
+        const msg = document.getElementById('broadcastMsg').value.trim();
+        const type = document.getElementById('broadcastType').value;
+        if (!msg) { toast('Message khaali hai!', 'error'); return; }
+        const icons = { info:'ℹ️', warning:'⚠️', promo:'🎁', maintenance:'🔧' };
+        const broadcast = {
+            message: msg, type, icon: icons[type] || 'ℹ️',
+            sentBy: auth.currentUser?.email || 'admin',
+            time: Date.now(), active: true
+        };
+        db.ref('broadcasts').push(broadcast).then(() => {
+            toast('📢 Broadcast sent to all users!', 'success');
+            document.getElementById('broadcastMsg').value = '';
+            loadRecentBroadcasts();
+        });
+    }
+    function loadRecentBroadcasts() {
+        db.ref('broadcasts').orderByChild('time').limitToLast(5).once('value', snap => {
+            const items = [];
+            snap.forEach(c => items.unshift({ id: c.key, ...c.val() }));
+            const container = document.getElementById('recentBroadcasts');
+            if (!container) return;
+            container.innerHTML = items.length ? items.map(b => `
+                <div style="display:flex;align-items:center;gap:10px;padding:8px 12px;background:rgba(255,255,255,0.04);border-radius:8px;margin-bottom:6px;font-size:13px;">
+                    <span>${b.icon||'ℹ️'}</span>
+                    <span style="flex:1;color:var(--text);">${b.message}</span>
+                    <span style="color:var(--muted);font-size:11px;font-family:var(--mono);">${new Date(b.time).toLocaleString('en-IN',{dateStyle:'short',timeStyle:'short'})}</span>
+                    <button class="btn btn-red btn-sm" onclick="deleteBroadcast('${b.id}')">✕</button>
+                </div>`).join('')
+                : '<div style="font-size:13px;color:var(--muted);padding:8px 0;">No broadcasts yet</div>';
+        });
+    }
+    function deleteBroadcast(id) {
+        db.ref('broadcasts/'+id).remove().then(() => { toast('Broadcast deleted', 'success'); loadRecentBroadcasts(); });
+    }
+
+    // ===== PUSH NOTIFICATIONS =====
+    document.getElementById('notifTarget').addEventListener('change', function() {
+        document.getElementById('notifUIDBox').style.display = this.value === 'single' ? 'block' : 'none';
+    });
+
+    const notifTemplates = {
+        bonus:       { title: '🎁 Daily Bonus Available!', body: 'Aaj ka spin abhi claim karo — ₹50 se ₹1,000 tak jeeto!' },
+        deposit:     { title: '✅ Deposit Approved!', body: 'Aapka deposit verify ho gaya. Ab khelo aur jeeto!' },
+        promo:       { title: '🎉 Special Promo Alert!', body: 'Aaj special offer hai — zyada deposit karo, zyada bonus pao!' },
+        maintenance: { title: '🔧 Maintenance Notice', body: 'Casino thodi der ke liye band rahega. Jaldi wapas aayenge!' },
+        withdraw:    { title: '💸 Withdrawal Processed!', body: 'Aapki withdrawal request process ho gayi. Amount jald milega.' }
+    };
+    function setNotifTemplate(key) {
+        const t = notifTemplates[key];
+        if (!t) return;
+        document.getElementById('notifTitle').value = t.title;
+        document.getElementById('notifBody').value = t.body;
+    }
+
+    function sendNotification() {
+        const title = document.getElementById('notifTitle').value.trim();
+        const body  = document.getElementById('notifBody').value.trim();
+        const url   = document.getElementById('notifUrl').value.trim();
+        const target = document.getElementById('notifTarget').value;
+        const uid   = document.getElementById('notifUID').value.trim();
+        if (!title || !body) { toast('Title aur message required hai', 'error'); return; }
+
+        const notif = { title, body, url: url||'/casino.html', target, uid: target==='single'?uid:'all', time: Date.now(), sentBy: auth.currentUser?.email||'admin' };
+
+        // Save to Firebase — casino.html listens & shows in-app toast
+        if (target === 'single' && uid) {
+            db.ref('notifications/'+uid).push(notif);
+        } else {
+            db.ref('notifications/all').push(notif);
+        }
+
+        // Save to history
+        db.ref('notifHistory').push(notif).then(() => {
+            toast('🔔 Notification sent!', 'success');
+            loadNotifHistory();
+            document.getElementById('notifTitle').value = '';
+            document.getElementById('notifBody').value = '';
+        });
+    }
+
+    function loadNotifHistory() {
+        db.ref('notifHistory').orderByChild('time').limitToLast(20).once('value', snap => {
+            const items = [];
+            snap.forEach(c => items.unshift({ id: c.key, ...c.val() }));
+            const el = document.getElementById('notifHistory');
+            if (!el) return;
+            el.innerHTML = items.length ? `
+                <div class="table-wrap">
+                <table>
+                    <thead><tr><th>Title</th><th>Message</th><th>Target</th><th>Sent By</th><th>Time</th></tr></thead>
+                    <tbody>${items.map(n => `
+                        <tr>
+                            <td style="font-weight:700">${n.title||'—'}</td>
+                            <td style="color:var(--muted);font-size:13px;max-width:200px;overflow:hidden;text-overflow:ellipsis;">${n.body||'—'}</td>
+                            <td><span class="badge ${n.target==='all'?'active':'pending'}">${n.target==='all'?'📢 All':'👤 '+n.uid?.slice(0,8)+'...'}</span></td>
+                            <td style="font-size:12px;color:var(--muted)">${n.sentBy||'admin'}</td>
+                            <td style="font-size:12px;color:var(--muted)">${new Date(n.time).toLocaleString('en-IN',{dateStyle:'short',timeStyle:'short'})}</td>
+                        </tr>`).join('')}
+                    </tbody>
+                </table></div>`
+            : '<div class="empty"><div class="empty-icon">🔔</div>No notifications sent yet</div>';
+        });
+    }
+
+    // ===== SHOWPAGE — extend for notify =====
+    const _origShowPage = showPage;
+    function showPage(page) {
+        document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
+        document.querySelectorAll('.nav-item').forEach(n => n.classList.remove('active'));
+        const pageEl = document.getElementById('page-'+page);
+        if (pageEl) pageEl.classList.add('active');
+        event?.currentTarget?.classList.add('active');
+        if (page === 'dashboard') { loadDashboard(); loadRecentBroadcasts(); }
+        else if (page === 'deposits') loadDeposits();
+        else if (page === 'withdrawals') loadWithdrawals();
+        else if (page === 'users') loadUsers();
+        else if (page === 'leaderboard') loadLeaderboard();
+        else if (page === 'notify') loadNotifHistory();
+    }
+
+</script>
+</body>
+</html>
